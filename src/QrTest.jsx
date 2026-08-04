@@ -78,6 +78,7 @@ function QrTest() {
   const { error: historyError } = await supabase
     .from('tool_history')
     .insert({
+      tool_name: tool.name,
       tool_id: tool.id,
       action: 'checked_out',
       tech_name: techName.trim(),
@@ -118,6 +119,7 @@ const handleReturn = async () => {
     .from('tool_history')
     .insert({
       tool_id: tool.id,
+      tool_name: tool.name,
       action: 'returned',
       tech_name: techWhoReturned,
       timestamp: now,
@@ -131,21 +133,38 @@ const handleReturn = async () => {
 };
 
   const handleToggleCondition = async () => {
-    const newCondition = tool.condition === 'Ready' ? 'Damaged' : 'Ready';
+  const newCondition = tool.condition === 'Ready' ? 'Damaged' : 'Ready';
 
-    const { data, error } = await supabase
-      .from('tools')
-      .update({ condition: newCondition })
-      .eq('id', tool.id)
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('tools')
+    .update({ condition: newCondition })
+    .eq('id', tool.id)
+    .select()
+    .single();
 
-    if (error) {
-      alert('Error updating condition: ' + error.message);
-    } else {
-      setTool(data);
-    }
-  };
+  if (error) {
+    alert('Error updating condition: ' + error.message);
+    return;
+  }
+
+  // Log this action to history
+  const { error: historyError } = await supabase
+    .from('tool_history')
+    .insert({
+      tool_id: tool.id,
+      tool_name: tool.name,
+      action: 'condition_changed',
+      tech_name: tool.checked_out_by,
+      timestamp: new Date().toISOString(),
+      condition_change: newCondition,
+    });
+
+  if (historyError) {
+    alert('Failed to log history: ' + JSON.stringify(historyError));
+  }
+
+  setTool(data);
+};
 
   return (
     <div>
