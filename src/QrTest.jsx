@@ -51,31 +51,52 @@ function QrTest() {
   }, []);
 
   const handleCheckOut = async () => {
-    if (!techName.trim()) {
-      alert('Please enter a tech name');
-      return;
-    }
+  if (!techName.trim()) {
+    alert('Please enter a tech name');
+    return;
+  }
 
-    const { data, error } = await supabase
-      .from('tools')
-      .update({
-        is_checked_out: true,
-        checked_out_by: techName.trim(),
-        checked_out_at: new Date().toISOString(),
-      })
-      .eq('id', tool.id)
-      .select()
-      .single();
+  const now = new Date().toISOString();
 
-    if (error) {
-      alert('Error checking out tool: ' + error.message);
-    } else {
-      setTool(data);
-      setTechName('');
-    }
-  };
+  const { data, error } = await supabase
+    .from('tools')
+    .update({
+      is_checked_out: true,
+      checked_out_by: techName.trim(),
+      checked_out_at: now,
+    })
+    .eq('id', tool.id)
+    .select()
+    .single();
 
-  const handleReturn = async () => {
+  if (error) {
+    alert('Error checking out tool: ' + error.message);
+    return;
+  }
+
+  // Log this action to history
+  const { error: historyError } = await supabase
+    .from('tool_history')
+    .insert({
+      tool_id: tool.id,
+      action: 'checked_out',
+      tech_name: techName.trim(),
+      timestamp: now,
+    });
+
+  if (historyError) {
+    console.error('Failed to log history:', historyError.message);
+    // Not blocking the user for this — the check-out itself succeeded
+  }
+
+  setTool(data);
+  setTechName('');
+};
+
+const handleReturn = async () => {
+  const now = new Date().toISOString();
+  const techWhoReturned = tool.checked_out_by; // capture before we clear it
+
   const { data, error } = await supabase
     .from('tools')
     .update({
@@ -88,13 +109,25 @@ function QrTest() {
     .single();
 
   if (error) {
-    alert('Error returning tool: ' + JSON.stringify(error));
-  } else if (!data) {
-    alert('Update ran but no data came back — check RLS or ID match.');
-  } else {
-    alert('Success! New state: ' + JSON.stringify(data));
-    setTool(data);
+    alert('Error returning tool: ' + error.message);
+    return;
   }
+
+  // Log this action to history
+  const { error: historyError } = await supabase
+    .from('tool_history')
+    .insert({
+      tool_id: tool.id,
+      action: 'returned',
+      tech_name: techWhoReturned,
+      timestamp: now,
+    });
+
+  if (historyError) {
+    console.error('Failed to log history:', historyError.message);
+  }
+
+  setTool(data);
 };
 
   const handleToggleCondition = async () => {
