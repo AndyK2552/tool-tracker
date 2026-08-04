@@ -23,6 +23,7 @@ function QrTest() {
       async (decodedText) => {
         // Pause scanning once we get a hit, so it doesn't keep firing
         scanner.pause();
+        console.log('Decoded text:', JSON.stringify(decodedText));
 
         const { data, error } = await supabase
           .from('tools')
