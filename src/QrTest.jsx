@@ -28,7 +28,6 @@ function QrTest() {
       'qr-reader',
       {
         fps: 10,
-        qrbox: 250,
         videoConstraints: {
           facingMode: { exact: 'environment' },
         },
@@ -77,23 +76,26 @@ function QrTest() {
   };
 
   const handleReturn = async () => {
-    const { data, error } = await supabase
-      .from('tools')
-      .update({
-        is_checked_out: false,
-        checked_out_by: null,
-        checked_out_at: null,
-      })
-      .eq('id', tool.id)
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('tools')
+    .update({
+      is_checked_out: false,
+      checked_out_by: null,
+      checked_out_at: null,
+    })
+    .eq('id', tool.id)
+    .select()
+    .single();
 
-    if (error) {
-      alert('Error returning tool: ' + error.message);
-    } else {
-      setTool(data);
-    }
-  };
+  if (error) {
+    alert('Error returning tool: ' + JSON.stringify(error));
+  } else if (!data) {
+    alert('Update ran but no data came back — check RLS or ID match.');
+  } else {
+    alert('Success! New state: ' + JSON.stringify(data));
+    setTool(data);
+  }
+};
 
   const handleToggleCondition = async () => {
     const newCondition = tool.condition === 'Ready' ? 'Damaged' : 'Ready';
