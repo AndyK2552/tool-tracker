@@ -5,6 +5,23 @@ import { supabase } from './supabaseClient';
 function QrTest() {
   const [tool, setTool] = useState(null);
   const [error, setError] = useState(null);
+  const [techName, setTechName] = useState('');
+
+  const scanForTool = async (decodedText) => {
+    const { data, error } = await supabase
+      .from('tools')
+      .select('*')
+      .eq('id', decodedText)
+      .single();
+
+    if (error || !data) {
+      setError(`No tool found for ID: ${decodedText}`);
+      setTool(null);
+    } else {
+      setTool(data);
+      setError(null);
+    }
+  };
 
   useEffect(() => {
     const scanner = new Html5QrcodeScanner(
@@ -21,27 +38,10 @@ function QrTest() {
 
     scanner.render(
       async (decodedText) => {
-        // Pause scanning once we get a hit, so it doesn't keep firing
         scanner.pause();
-        console.log('Decoded text:', JSON.stringify(decodedText));
-
-        const { data, error } = await supabase
-          .from('tools')
-          .select('*')
-          .eq('id', decodedText)
-          .single();
-
-        if (error || !data) {
-          setError(`No tool found for ID: ${decodedText}`);
-          setTool(null);
-        } else {
-          setTool(data);
-          setError(null);
-        }
+        await scanForTool(decodedText);
       },
-      (error) => {
-        // Fires continuously while no code is found — ignore
-      }
+      (error) => {}
     );
 
     return () => {
@@ -50,6 +50,67 @@ function QrTest() {
       });
     };
   }, []);
+
+  const handleCheckOut = async () => {
+    if (!techName.trim()) {
+      alert('Please enter a tech name');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('tools')
+      .update({
+        is_checked_out: true,
+        checked_out_by: techName.trim(),
+        checked_out_at: new Date().toISOString(),
+      })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      alert('Error checking out tool: ' + error.message);
+    } else {
+      setTool(data);
+      setTechName('');
+    }
+  };
+
+  const handleReturn = async () => {
+    const { data, error } = await supabase
+      .from('tools')
+      .update({
+        is_checked_out: false,
+        checked_out_by: null,
+        checked_out_at: null,
+      })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      alert('Error returning tool: ' + error.message);
+    } else {
+      setTool(data);
+    }
+  };
+
+  const handleToggleCondition = async () => {
+    const newCondition = tool.condition === 'Ready' ? 'Damaged' : 'Ready';
+
+    const { data, error } = await supabase
+      .from('tools')
+      .update({ condition: newCondition })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      alert('Error updating condition: ' + error.message);
+    } else {
+      setTool(data);
+    }
+  };
 
   return (
     <div>
@@ -65,6 +126,26 @@ function QrTest() {
           <p><strong>Checked out:</strong> {tool.is_checked_out ? 'Yes' : 'No'}</p>
           <p><strong>Checked out by:</strong> {tool.checked_out_by || '—'}</p>
           <p><strong>Condition:</strong> {tool.condition}</p>
+
+          {!tool.is_checked_out ? (
+            <div style={{ marginTop: '1rem' }}>
+              <input
+                type="text"
+                placeholder="Tech name"
+                value={techName}
+                onChange={(e) => setTechName(e.target.value)}
+                style={{ marginRight: '0.5rem', padding: '0.5rem' }}
+              />
+              <button onClick={handleCheckOut}>Check Out</button>
+            </div>
+          ) : (
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+              <button onClick={handleReturn}>Return</button>
+              <button onClick={handleToggleCondition}>
+                Change Condition ({tool.condition === 'Ready' ? 'Mark Damaged' : 'Mark Ready'})
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
