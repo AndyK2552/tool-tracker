@@ -5,6 +5,7 @@ import QrTest from './QrTest.jsx'
 import Auth from './Auth.jsx'
 import Registration from './Registration.jsx'
 import ToolStatus from './ToolStatus.jsx'
+import AdminPage from './AdminPage.jsx'
 import { supabase } from './supabaseClient.js'
 
 function Root() {
@@ -62,10 +63,17 @@ function Root() {
     return <ToolStatus onBack={() => setView('scanner')} />
   }
 
+  if (view === 'admin') {
+    return <AdminPage onBack={() => setView('scanner')} />
+  }
+
   return (
     <div>
-      <div style={{ padding: '1rem', textAlign: 'right' }}>
+      <div style={{ padding: '1rem', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
         <button onClick={() => setView('status')}>View Tool Status</button>
+        {profile.is_admin && (
+          <button onClick={() => setView('admin')}>Admin</button>
+        )}
       </div>
       <QrTest techProfile={profile} />
     </div>
