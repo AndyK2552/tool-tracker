@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { supabase } from './supabaseClient';
-import Tesseract from 'tesseract.js';
 
 function AdminPage({ onBack, onViewTools }) {
   const [name, setName] = useState('');
@@ -34,31 +33,44 @@ function AdminPage({ onBack, onViewTools }) {
   };
 
   const handleImageCapture = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const file = e.target.files[0];
+  if (!file) return;
 
-    setScanning(true);
-    setMessage(null);
+  setScanning(true);
+  setMessage(null);
 
-    try {
-      const result = await Tesseract.recognize(file, 'eng');
-      const rawText = result.data.text.trim();
+  try {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
-      // Serial numbers are usually a single line/token — grab the most
-      // "serial-looking" chunk (letters/numbers, no spaces) as a starting guess
-      const cleaned = rawText.replace(/\s+/g, ' ').trim();
+    const response = await fetch('/api/analyze-tool', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64, mediaType: file.type }),
+    });
 
-      setSerial(cleaned);
-      setMessage({
-        type: 'info',
-        text: 'Text detected — please review and correct below before saving.',
-      });
-    } catch (err) {
-      setMessage({ type: 'error', text: 'OCR failed: ' + err.message });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to analyze image');
     }
 
-    setScanning(false);
-  };
+    setName(result.name || '');
+    setSerial(result.serial || '');
+    setMessage({
+      type: 'info',
+      text: 'Detected — please review and correct below before saving.',
+    });
+  } catch (err) {
+    setMessage({ type: 'error', text: 'AI scan failed: ' + err.message });
+  }
+
+  setScanning(false);
+};
 
   return (
     <div>
