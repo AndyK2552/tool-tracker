@@ -194,24 +194,29 @@ const handleReturn = async () => {
 
   return (
     <div>
-      <h1>QR Scanner Test</h1>
-      <div id="qr-reader" style={{ width: '100%' }}></div>
+  <h1>Scan Tool</h1>
 
-<div style={{ marginTop: '1rem' }}>
-  <label style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ccc', cursor: 'pointer' }}>
-    {scanningWithAI ? 'Analyzing photo...' : '🤖 Scan Serial with AI (if QR code is damaged)'}
-    <input
-      type="file"
-      accept="image/*"
-      capture="environment"
-      onChange={handleAIScan}
-      disabled={scanningWithAI}
-      style={{ display: 'none' }}
-    />
-  </label>
-</div>
+  <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1rem' }}>
+    <div id="qr-reader" style={{ width: '100%' }}></div>
 
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+    <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
+      Point the camera at the tool's QR code — it'll scan automatically.
+    </p>
+
+    <label style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', fontSize: '0.9rem' }}>
+      {scanningWithAI ? 'Analyzing photo...' : "Can't scan the code? Tap to photograph the serial number"}
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleAIScan}
+        disabled={scanningWithAI}
+        style={{ display: 'none' }}
+      />
+    </label>
+  </div>
+
+  {error && <p style={{ color: 'red' }}>{error}</p>}
 
       {tool && (
         <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid #ccc' }}>
