@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from './supabaseClient';
 
-function AdminPage({ onBack }) {
+function AdminPage({ onBack, onViewTools }) {
   const [name, setName] = useState('');
   const [serial, setSerial] = useState('');
   const [saving, setSaving] = useState(false);
@@ -32,9 +32,13 @@ function AdminPage({ onBack }) {
   };
 
   return (
-    <div style={{ padding: '1rem' }}>
-      <button onClick={onBack} style={{ marginBottom: '1rem' }}>← Back to Scanner</button>
-      <h1>Admin: Add Tool</h1>
+  <div>
+    <h1>Admin: Add Tool</h1>
+    <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+      <button onClick={onBack}>← Back to Scanner</button>
+      <button onClick={onViewTools}>View Tools</button>
+    </div>
+
 
       <form onSubmit={handleAddTool} style={{ maxWidth: '400px' }}>
         <label>Tool Name</label>

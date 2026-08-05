@@ -70,7 +70,7 @@ function Root() {
   return (
     <div>
       <div style={{ padding: '1rem', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-        <button onClick={() => setView('status')}>View Tool Status</button>
+        <button onClick={() => setView('status')}>View Tools</button>
         {profile.is_admin && (
           <button onClick={() => setView('admin')}>Admin</button>
         )}
