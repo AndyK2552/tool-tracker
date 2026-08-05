@@ -101,7 +101,7 @@ function AdminPage({ onBack, onViewTools }) {
 
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ccc', cursor: 'pointer' }}>
-            {scanning ? 'Reading image...' : '📷 Scan Serial with OCR'}
+            {scanning ? 'Analyzing photo...' : '🤖 Scan Tool with AI'}
             <input
               type="file"
               accept="image/*"
