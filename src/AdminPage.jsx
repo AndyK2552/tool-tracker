@@ -40,17 +40,12 @@ function AdminPage({ onBack, onViewTools }) {
   setMessage(null);
 
   try {
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    const resizedBase64 = await resizeImage(file, 1024); // max 1024px on the longest side
 
     const response = await fetch('/api/analyze-tool', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: base64, mediaType: file.type }),
+      body: JSON.stringify({ image: resizedBase64, mediaType: 'image/jpeg' }),
     });
 
     const result = await response.json();
@@ -70,6 +65,42 @@ function AdminPage({ onBack, onViewTools }) {
   }
 
   setScanning(false);
+};
+
+// Resizes an image file down to maxDimension on its longest side,
+// returns just the base64 data (no data URL prefix), as JPEG.
+const resizeImage = (file, maxDimension) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      img.onload = () => {
+        let { width, height } = img;
+
+        if (width > height && width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else if (height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // 0.8 = decent quality, smaller size
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 };
 
   return (
