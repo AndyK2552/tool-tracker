@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import { resizeImage } from './imageUtils';
@@ -7,40 +7,8 @@ function QrTest({ techProfile }) {
   const [tool, setTool] = useState(null);
   const [error, setError] = useState(null);
   const [scanningWithAI, setScanningWithAI] = useState(false);
+  const scannerRef = useRef(null);
 
-  const handleAIScan = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  setScanningWithAI(true);
-  setError(null);
-
-  try {
-    const resizedBase64 = await resizeImage(file, 1024);
-
-    const response = await fetch('/api/analyze-tool', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: resizedBase64, mediaType: 'image/jpeg' }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to analyze image');
-    }
-
-    if (!result.serial) {
-      setError('Could not detect a serial number in that photo. Try again with better lighting or a closer shot.');
-    } else {
-      await scanForTool(result.serial);
-    }
-  } catch (err) {
-    setError('AI scan failed: ' + err.message);
-  }
-
-  setScanningWithAI(false);
-};
   const scanForTool = async (decodedText) => {
     const { data, error } = await supabase
       .from('tools')
@@ -57,6 +25,40 @@ function QrTest({ techProfile }) {
     }
   };
 
+  const handleAIScan = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setScanningWithAI(true);
+    setError(null);
+
+    try {
+      const resizedBase64 = await resizeImage(file, 1024);
+
+      const response = await fetch('/api/analyze-tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: resizedBase64, mediaType: 'image/jpeg' }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to analyze image');
+      }
+
+      if (!result.serial) {
+        setError('Could not detect a serial number in that photo. Try again with better lighting or a closer shot.');
+      } else {
+        await scanForTool(result.serial);
+      }
+    } catch (err) {
+      setError('AI scan failed: ' + err.message);
+    }
+
+    setScanningWithAI(false);
+  };
+
   useEffect(() => {
     const scanner = new Html5QrcodeScanner(
       'qr-reader',
@@ -68,6 +70,8 @@ function QrTest({ techProfile }) {
       },
       false
     );
+
+    scannerRef.current = scanner;
 
     scanner.render(
       async (decodedText) => {
@@ -85,138 +89,145 @@ function QrTest({ techProfile }) {
   }, []);
 
   const handleCheckOut = async () => {
-  const now = new Date().toISOString();
+    const now = new Date().toISOString();
 
-  const { data, error } = await supabase
-    .from('tools')
-    .update({
-      is_checked_out: true,
-      checked_out_by: techProfile.name,
-      checked_out_at: now,
-    })
-    .eq('id', tool.id)
-    .select()
-    .single();
+    const { data, error } = await supabase
+      .from('tools')
+      .update({
+        is_checked_out: true,
+        checked_out_by: techProfile.name,
+        checked_out_at: now,
+      })
+      .eq('id', tool.id)
+      .select()
+      .single();
 
-  if (error) {
-    alert('Error checking out tool: ' + error.message);
-    return;
-  }
+    if (error) {
+      alert('Error checking out tool: ' + error.message);
+      return;
+    }
 
-  const { error: historyError } = await supabase
-    .from('tool_history')
-    .insert({
-      tool_name: tool.name,
-      tool_id: tool.id,
-      action: 'checked_out',
-      tech_name: techProfile.name,
-      timestamp: now,
-    });
+    const { error: historyError } = await supabase
+      .from('tool_history')
+      .insert({
+        tool_name: tool.name,
+        tool_id: tool.id,
+        action: 'checked_out',
+        tech_name: techProfile.name,
+        timestamp: now,
+      });
 
-  if (historyError) {
-    console.error('Failed to log history:', historyError.message);
-  }
+    if (historyError) {
+      console.error('Failed to log history:', historyError.message);
+    }
 
-  setTool(data);
-};
+    setTool(data);
+  };
 
-const handleReturn = async () => {
-  const now = new Date().toISOString();
-  const techWhoReturned = tool.checked_out_by; // capture before we clear it
+  const handleReturn = async () => {
+    const now = new Date().toISOString();
+    const techWhoReturned = tool.checked_out_by;
 
-  const { data, error } = await supabase
-    .from('tools')
-    .update({
-      is_checked_out: false,
-      checked_out_by: null,
-      checked_out_at: null,
-    })
-    .eq('id', tool.id)
-    .select()
-    .single();
+    const { data, error } = await supabase
+      .from('tools')
+      .update({
+        is_checked_out: false,
+        checked_out_by: null,
+        checked_out_at: null,
+      })
+      .eq('id', tool.id)
+      .select()
+      .single();
 
-  if (error) {
-    alert('Error returning tool: ' + error.message);
-    return;
-  }
+    if (error) {
+      alert('Error returning tool: ' + error.message);
+      return;
+    }
 
-  // Log this action to history
-  const { error: historyError } = await supabase
-    .from('tool_history')
-    .insert({
-      tool_id: tool.id,
-      tool_name: tool.name,
-      action: 'returned',
-      tech_name: techWhoReturned,
-      timestamp: now,
-    });
+    const { error: historyError } = await supabase
+      .from('tool_history')
+      .insert({
+        tool_id: tool.id,
+        tool_name: tool.name,
+        action: 'returned',
+        tech_name: techWhoReturned,
+        timestamp: now,
+      });
 
-  if (historyError) {
-    console.error('Failed to log history:', historyError.message);
-  }
+    if (historyError) {
+      console.error('Failed to log history:', historyError.message);
+    }
 
-  setTool(data);
-};
+    setTool(data);
+  };
 
   const handleToggleCondition = async () => {
-  const newCondition = tool.condition === 'Ready' ? 'Damaged' : 'Ready';
+    const newCondition = tool.condition === 'Ready' ? 'Damaged' : 'Ready';
 
-  const { data, error } = await supabase
-    .from('tools')
-    .update({ condition: newCondition })
-    .eq('id', tool.id)
-    .select()
-    .single();
+    const { data, error } = await supabase
+      .from('tools')
+      .update({ condition: newCondition })
+      .eq('id', tool.id)
+      .select()
+      .single();
 
-  if (error) {
-    alert('Error updating condition: ' + error.message);
-    return;
-  }
+    if (error) {
+      alert('Error updating condition: ' + error.message);
+      return;
+    }
 
-  // Log this action to history
-  const { error: historyError } = await supabase
-    .from('tool_history')
-    .insert({
-      tool_id: tool.id,
-      tool_name: tool.name,
-      action: 'condition_changed',
-      tech_name: tool.checked_out_by,
-      timestamp: new Date().toISOString(),
-      condition_change: newCondition,
-    });
+    const { error: historyError } = await supabase
+      .from('tool_history')
+      .insert({
+        tool_id: tool.id,
+        tool_name: tool.name,
+        action: 'condition_changed',
+        tech_name: tool.checked_out_by,
+        timestamp: new Date().toISOString(),
+        condition_change: newCondition,
+      });
 
-  if (historyError) {
-    alert('Failed to log history: ' + JSON.stringify(historyError));
-  }
+    if (historyError) {
+      alert('Failed to log history: ' + JSON.stringify(historyError));
+    }
 
-  setTool(data);
-};
+    setTool(data);
+  };
 
   return (
     <div>
-  <h1>Scan Tool</h1>
+      <h1>Scan Tool</h1>
 
-  <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1rem' }}>
-    <div id="qr-reader" style={{ width: '100%' }}></div>
+      <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1rem' }}>
+        <div style={{ display: tool ? 'none' : 'block' }}>
+          <div id="qr-reader" style={{ width: '100%' }}></div>
 
-    <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
-      Point the camera at the tool's QR code — it'll scan automatically.
-    </p>
+          <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
+            Point the camera at the tool's QR code — it'll scan automatically.
+          </p>
 
-    <label style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', fontSize: '0.9rem' }}>
-      {scanningWithAI ? 'Analyzing photo...' : "Can't scan the code? Tap to photograph the serial number"}
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleAIScan}
-        disabled={scanningWithAI}
-        style={{ display: 'none' }}
-      />
-    </label>
-  </div>
+          <label style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', fontSize: '0.9rem' }}>
+            {scanningWithAI ? 'Analyzing photo...' : "Can't scan the code? Tap to photograph the serial number"}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleAIScan}
+              disabled={scanningWithAI}
+              style={{ display: 'none' }}
+            />
+          </label>
+        </div>
 
-  {error && <p style={{ color: 'red' }}>{error}</p>}
+        {tool && (
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <div style={{ fontSize: '4rem', color: 'green' }}>✅</div>
+            <p style={{ color: 'green', fontWeight: 'bold', margin: 0 }}>Tool Found</p>
+          </div>
+        )}
+      </div>
+
+      {error && <p style={{ color: 'red' }}>{error}</p>}
 
       {tool && (
         <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid #ccc' }}>
@@ -230,7 +241,7 @@ const handleReturn = async () => {
             <div style={{ marginTop: '1rem' }}>
               <button onClick={handleCheckOut}>Check Out</button>
             </div>
-            ) : (
+          ) : (
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
               <button onClick={handleReturn}>Return</button>
               <button onClick={handleToggleCondition}>
@@ -238,6 +249,18 @@ const handleReturn = async () => {
               </button>
             </div>
           )}
+
+          <div style={{ marginTop: '1rem' }}>
+            <button
+              onClick={() => {
+                setTool(null);
+                setError(null);
+                scannerRef.current?.resume();
+              }}
+            >
+              Scan Another Tool
+            </button>
+          </div>
         </div>
       )}
     </div>
