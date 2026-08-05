@@ -1,11 +1,46 @@
 import { useEffect, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
+import { resizeImage } from './imageUtils';
 
 function QrTest({ techProfile }) {
   const [tool, setTool] = useState(null);
   const [error, setError] = useState(null);
+  const [scanningWithAI, setScanningWithAI] = useState(false);
 
+  const handleAIScan = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  setScanningWithAI(true);
+  setError(null);
+
+  try {
+    const resizedBase64 = await resizeImage(file, 1024);
+
+    const response = await fetch('/api/analyze-tool', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: resizedBase64, mediaType: 'image/jpeg' }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to analyze image');
+    }
+
+    if (!result.serial) {
+      setError('Could not detect a serial number in that photo. Try again with better lighting or a closer shot.');
+    } else {
+      await scanForTool(result.serial);
+    }
+  } catch (err) {
+    setError('AI scan failed: ' + err.message);
+  }
+
+  setScanningWithAI(false);
+};
   const scanForTool = async (decodedText) => {
     const { data, error } = await supabase
       .from('tools')
@@ -161,6 +196,20 @@ const handleReturn = async () => {
     <div>
       <h1>QR Scanner Test</h1>
       <div id="qr-reader" style={{ width: '100%' }}></div>
+
+<div style={{ marginTop: '1rem' }}>
+  <label style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ccc', cursor: 'pointer' }}>
+    {scanningWithAI ? 'Analyzing photo...' : '🤖 Scan Serial with AI (if QR code is damaged)'}
+    <input
+      type="file"
+      accept="image/*"
+      capture="environment"
+      onChange={handleAIScan}
+      disabled={scanningWithAI}
+      style={{ display: 'none' }}
+    />
+  </label>
+</div>
 
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
