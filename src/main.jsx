@@ -3,20 +3,40 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import QrTest from './QrTest.jsx'
 import Auth from './Auth.jsx'
+import Registration from './Registration.jsx'
 import { supabase } from './supabaseClient.js'
 
 function Root() {
   const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const loadProfile = async (userId) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+
+    setProfile(data || null)
+  }
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
+      if (session) {
+        await loadProfile(session.user.id)
+      }
       setLoading(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
+      if (session) {
+        await loadProfile(session.user.id)
+      } else {
+        setProfile(null)
+      }
     })
 
     return () => listener.subscription.unsubscribe()
@@ -24,7 +44,19 @@ function Root() {
 
   if (loading) return <p>Loading...</p>
 
-  return session ? <QrTest /> : <Auth />
+  if (!session) return <Auth />
+
+  if (!profile) {
+    return (
+      <Registration
+        userId={session.user.id}
+        email={session.user.email}
+        onComplete={() => loadProfile(session.user.id)}
+      />
+    )
+  }
+
+  return <QrTest techProfile={profile} />
 }
 
 createRoot(document.getElementById('root')).render(

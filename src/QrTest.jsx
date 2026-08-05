@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 
-function QrTest() {
+function QrTest({ techProfile }) {
   const [tool, setTool] = useState(null);
   const [error, setError] = useState(null);
-  const [techName, setTechName] = useState('');
 
   const scanForTool = async (decodedText) => {
     const { data, error } = await supabase
@@ -51,18 +50,13 @@ function QrTest() {
   }, []);
 
   const handleCheckOut = async () => {
-  if (!techName.trim()) {
-    alert('Please enter a tech name');
-    return;
-  }
-
   const now = new Date().toISOString();
 
   const { data, error } = await supabase
     .from('tools')
     .update({
       is_checked_out: true,
-      checked_out_by: techName.trim(),
+      checked_out_by: techProfile.name,
       checked_out_at: now,
     })
     .eq('id', tool.id)
@@ -74,24 +68,21 @@ function QrTest() {
     return;
   }
 
-  // Log this action to history
   const { error: historyError } = await supabase
     .from('tool_history')
     .insert({
       tool_name: tool.name,
       tool_id: tool.id,
       action: 'checked_out',
-      tech_name: techName.trim(),
+      tech_name: techProfile.name,
       timestamp: now,
     });
 
   if (historyError) {
     console.error('Failed to log history:', historyError.message);
-    // Not blocking the user for this — the check-out itself succeeded
   }
 
   setTool(data);
-  setTechName('');
 };
 
 const handleReturn = async () => {
@@ -183,16 +174,9 @@ const handleReturn = async () => {
 
           {!tool.is_checked_out ? (
             <div style={{ marginTop: '1rem' }}>
-              <input
-                type="text"
-                placeholder="Tech name"
-                value={techName}
-                onChange={(e) => setTechName(e.target.value)}
-                style={{ marginRight: '0.5rem', padding: '0.5rem' }}
-              />
               <button onClick={handleCheckOut}>Check Out</button>
             </div>
-          ) : (
+            ) : (
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
               <button onClick={handleReturn}>Return</button>
               <button onClick={handleToggleCondition}>
