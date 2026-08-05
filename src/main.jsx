@@ -4,12 +4,14 @@ import './index.css'
 import QrTest from './QrTest.jsx'
 import Auth from './Auth.jsx'
 import Registration from './Registration.jsx'
+import ToolStatus from './ToolStatus.jsx'
 import { supabase } from './supabaseClient.js'
 
 function Root() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [view, setView] = useState('scanner')
 
   const loadProfile = async (userId) => {
     const { data } = await supabase
@@ -56,7 +58,18 @@ function Root() {
     )
   }
 
-  return <QrTest techProfile={profile} />
+  if (view === 'status') {
+    return <ToolStatus onBack={() => setView('scanner')} />
+  }
+
+  return (
+    <div>
+      <div style={{ padding: '1rem', textAlign: 'right' }}>
+        <button onClick={() => setView('status')}>View Tool Status</button>
+      </div>
+      <QrTest techProfile={profile} />
+    </div>
+  )
 }
 
 createRoot(document.getElementById('root')).render(
