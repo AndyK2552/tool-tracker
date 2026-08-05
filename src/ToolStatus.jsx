@@ -44,10 +44,11 @@ function ToolStatus({ onBack }) {
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {available.map((tool) => (
               <li key={tool.id} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
+                <span style={{ color: 'green', marginRight: '0.5rem' }}>●</span>
                 <strong>{tool.name}</strong>
                 <br />
                 <span style={{ fontSize: '0.85rem', color: '#666' }}>
-                  {tool.condition === 'Damaged' ? '⚠️ Damaged' : 'Ready'}
+                  {tool.id}
                 </span>
               </li>
             ))}
@@ -60,10 +61,11 @@ function ToolStatus({ onBack }) {
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {checkedOut.map((tool) => (
               <li key={tool.id} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
+                <span style={{ color: 'red', marginRight: '0.5rem' }}>●</span>
                 <strong>{tool.name}</strong>
                 <br />
                 <span style={{ fontSize: '0.85rem', color: '#666' }}>
-                  With: {tool.checked_out_by}
+                  Checked out by: {tool.checked_out_by}
                   {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}
                 </span>
               </li>
