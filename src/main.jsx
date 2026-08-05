@@ -64,7 +64,8 @@ function Root() {
   }
 
   if (view === 'admin') {
-    return <AdminPage onBack={() => setView('scanner')} />
+    if (view === 'admin') {
+  return <AdminPage onBack={() => setView('scanner')} onViewTools={() => setView('status')} />
   }
 
   return (
