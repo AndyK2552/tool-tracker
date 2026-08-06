@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 
 const formatDuration = (checkedOutAt) => {
-  const start = new Date(checkedOutAt);
+  const utcString = checkedOutAt.endsWith('Z') ? checkedOutAt : checkedOutAt + 'Z';
+  const start = new Date(utcString);
   const now = new Date();
   const diffMs = now - start;
 
