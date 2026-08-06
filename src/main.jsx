@@ -7,6 +7,8 @@ import ToolStatus from './ToolStatus.jsx'
 import AdminPage from './AdminPage.jsx'
 import { supabase } from './supabaseClient.js'
 import { StrictMode, useState, useEffect, useRef } from 'react'
+import AdminHome from './AdminHome.jsx'
+import CheckoutHistory from './CheckoutHistory.jsx'
 
 function Root() {
   const [session, setSession] = useState(null)
@@ -16,19 +18,19 @@ function Root() {
   const hasSetInitialView = useRef(false)
 
   const loadProfile = async (userId) => {
-  const { data } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single()
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
 
-  setProfile(data || null)
+    setProfile(data || null)
 
-  if (data?.is_admin && !hasSetInitialView.current) {
-    setView('status')
-    hasSetInitialView.current = true
+    if (data?.is_admin && !hasSetInitialView.current) {
+      setView('home')
+      hasSetInitialView.current = true
+    }
   }
-}
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -65,26 +67,34 @@ function Root() {
     )
   }
 
+  if (view === 'home') {
+    return <AdminHome onNavigate={(v) => setView(v)} />
+  }
+
   if (view === 'status') {
-  return (
-    <ToolStatus
-      onBack={() => setView('scanner')}
-      onAddTool={() => setView('admin')}
-      isAdmin={profile.is_admin}
-    />
-  )
-}
+    return (
+      <ToolStatus
+        onHome={() => setView('home')}
+        isAdmin={profile.is_admin}
+      />
+    )
+  }
+
+  if (view === 'history') {
+    return <CheckoutHistory onHome={() => setView('home')} />
+  }
 
   if (view === 'admin') {
-    return <AdminPage onBack={() => setView('scanner')} onViewTools={() => setView('status')} />
+    return <AdminPage onHome={() => setView('home')} />
   }
 
   return (
     <div>
-      <div style={{ padding: '1rem', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-        <button onClick={() => setView('status')}>View Tools</button>
-        {profile.is_admin && (
-          <button onClick={() => setView('admin')}>Add New Tool</button>
+      <div style={{ padding: '1rem', textAlign: 'right' }}>
+        {profile.is_admin ? (
+          <button onClick={() => setView('home')}>Home</button>
+        ) : (
+          <button onClick={() => setView('status')}>View Tools</button>
         )}
       </div>
       <QrTest techProfile={profile} />
