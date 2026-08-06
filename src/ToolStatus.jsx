@@ -1,6 +1,24 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 
+const formatDuration = (checkedOutAt) => {
+  const start = new Date(checkedOutAt);
+  const now = new Date();
+  const diffMs = now - start;
+
+  const totalMinutes = Math.floor(diffMs / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  parts.push(`${minutes}m`);
+
+  return parts.join(' ');
+};
+
 function ToolStatus({ onBack, onAddTool, isAdmin }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +52,7 @@ function ToolStatus({ onBack, onAddTool, isAdmin }) {
 
   return (
     <div style={{ padding: '1rem' }}>
-      <button onClick={onBack} style={{ marginBottom: '1rem' }}>Go to Scanner</button>
+      <button onClick={onBack} style={{ marginBottom: '1rem' }}>Check Out Tool</button>
       {isAdmin && (
         <button onClick={onAddTool} style={{ marginBottom: '1rem', marginLeft: '0.5rem' }}>Add New Tool</button>
         )}
@@ -63,15 +81,17 @@ function ToolStatus({ onBack, onAddTool, isAdmin }) {
           {checkedOut.length === 0 && <p>No tools currently checked out.</p>}
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {checkedOut.map((tool) => (
-              <li key={tool.id} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
+            <li key={tool.id} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
                 <span style={{ color: 'red', marginRight: '0.5rem' }}>●</span>
                 <strong>{tool.name}</strong>
                 <br />
-                <span style={{ fontSize: '0.85rem', color: '#666' }}>
-                  Checked out by: {tool.checked_out_by}
-                  {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}
+                <span style={{ fontSize: '0.85rem', color: '#666', marginLeft: '1.2rem' }}>
+                Checked out by: {tool.checked_out_by}
+                {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}
+                <br />
+                Duration: {formatDuration(tool.checked_out_at)}
                 </span>
-              </li>
+            </li>
             ))}
           </ul>
         </div>

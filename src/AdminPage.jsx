@@ -77,7 +77,7 @@ function AdminPage({ onBack, onViewTools }) {
     <div>
       <h1>Admin: Add Tool</h1>
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
-        <button onClick={onBack}>Go to Scanner</button>
+        <button onClick={onBack}>Check Out Tool</button>
         <button onClick={onViewTools}>View Tools</button>
       </div>
 
