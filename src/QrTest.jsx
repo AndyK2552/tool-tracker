@@ -196,7 +196,7 @@ function QrTest({ techProfile }) {
 
   return (
     <div>
-      <h1>Scan Tool</h1>
+      <h1>Check-Out Tool</h1>
 
       <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1rem' }}>
         <div style={{ display: tool ? 'none' : 'block' }}>
@@ -237,18 +237,24 @@ function QrTest({ techProfile }) {
           <p><strong>Checked out by:</strong> {tool.checked_out_by || '—'}</p>
           <p><strong>Condition:</strong> {tool.condition}</p>
 
-          {!tool.is_checked_out ? (
-            <div style={{ marginTop: '1rem' }}>
-              <button onClick={handleCheckOut}>Check Out</button>
-            </div>
-          ) : (
-            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-              <button onClick={handleReturn}>Return</button>
-              <button onClick={handleToggleCondition}>
-                Change Condition ({tool.condition === 'Ready' ? 'Mark Damaged' : 'Mark Ready'})
-              </button>
-            </div>
-          )}
+              {!tool.is_checked_out ? (
+      <div style={{ marginTop: '1rem' }}>
+        <button onClick={handleCheckOut}>Check Out</button>
+      </div>
+    ) : (
+      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+        {(techProfile.is_admin || tool.checked_out_by === techProfile.name) ? (
+          <button onClick={handleReturn}>Return</button>
+        ) : (
+          <button disabled title={`Only ${tool.checked_out_by} or an admin can return this tool`}>
+            Return
+          </button>
+        )}
+        <button onClick={handleToggleCondition}>
+          Change Condition ({tool.condition === 'Ready' ? 'Mark Damaged' : 'Mark Ready'})
+        </button>
+      </div>
+    )}
 
           <div style={{ marginTop: '1rem' }}>
             <button
