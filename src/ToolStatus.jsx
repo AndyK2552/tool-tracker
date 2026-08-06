@@ -85,6 +85,8 @@ function ToolStatus({ onHome, isAdmin }) {
                 <strong>{tool.name}</strong>
                 <br />
                 <span style={{ fontSize: '0.85rem', color: '#666', marginLeft: '1.2rem' }}>
+                    {tool.id}
+                    <br />
                   Checked out by: {tool.checked_out_by}
                   {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}
                   <br />
