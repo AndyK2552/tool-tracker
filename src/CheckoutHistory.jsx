@@ -35,7 +35,6 @@ function CheckoutHistory({ onHome }) {
     fetchHistory();
   }, []);
 
-  // Close the open filter dropdown if the user clicks anywhere outside it
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -85,6 +84,16 @@ function CheckoutHistory({ onHome }) {
     const current = activeFilters[key];
     if (!current) return true;
     return current.has(value);
+  };
+
+  const handleSearchChange = (key, value) => {
+    setSearchText(value);
+
+    const allVals = uniqueValues(key);
+    const matching = allVals.filter((v) =>
+      v.toLowerCase().includes(value.toLowerCase())
+    );
+    setActiveFilters((prev) => ({ ...prev, [key]: new Set(matching) }));
   };
 
   const setSort = (key, direction) => {
@@ -196,7 +205,7 @@ function CheckoutHistory({ onHome }) {
                           type="text"
                           placeholder="Search..."
                           value={searchText}
-                          onChange={(e) => setSearchText(e.target.value)}
+                          onChange={(e) => handleSearchChange(col.key, e.target.value)}
                           style={{ width: '100%', padding: '0.3rem', marginBottom: '0.4rem', fontSize: '0.85rem', boxSizing: 'border-box' }}
                         />
 
