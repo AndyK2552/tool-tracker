@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from './supabaseClient';
 import { resizeImage } from './imageUtils';
 
-function AdminPage({ onBack, onViewTools }) {
+function AdminPage({ onHome }) {
   const [name, setName] = useState('');
   const [serial, setSerial] = useState('');
   const [saving, setSaving] = useState(false);
@@ -24,13 +24,12 @@ function AdminPage({ onBack, onViewTools }) {
       });
 
     if (error) {
-  if (error.code === '23505') {
-    setMessage({ type: 'error', text: `A tool with serial number "${serial.trim()}" already exists.` });
-  } else {
-    setMessage({ type: 'error', text: error.message });
-  }
-} 
-    else {
+      if (error.code === '23505') {
+        setMessage({ type: 'error', text: `A tool with serial number "${serial.trim()}" already exists.` });
+      } else {
+        setMessage({ type: 'error', text: error.message });
+      }
+    } else {
       setMessage({ type: 'success', text: `Added "${name}" successfully.` });
       setName('');
       setSerial('');
@@ -39,46 +38,45 @@ function AdminPage({ onBack, onViewTools }) {
   };
 
   const handleImageCapture = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-  setScanning(true);
-  setMessage(null);
+    setScanning(true);
+    setMessage(null);
 
-  try {
-    const resizedBase64 = await resizeImage(file, 1024); // max 1024px on the longest side
+    try {
+      const resizedBase64 = await resizeImage(file, 1024);
 
-    const response = await fetch('/api/analyze-tool', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: resizedBase64, mediaType: 'image/jpeg' }),
-    });
+      const response = await fetch('/api/analyze-tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: resizedBase64, mediaType: file.type }),
+      });
 
-    const result = await response.json();
+      const result = await response.json();
 
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to analyze image');
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to analyze image');
+      }
+
+      setName(result.name || '');
+      setSerial(result.serial || '');
+      setMessage({
+        type: 'info',
+        text: 'Detected — please review and correct below before saving.',
+      });
+    } catch (err) {
+      setMessage({ type: 'error', text: 'AI scan failed: ' + err.message });
     }
 
-    setName(result.name || '');
-    setSerial(result.serial || '');
-    setMessage({
-      type: 'info',
-      text: 'Detected — please review and correct below before saving.',
-    });
-  } catch (err) {
-    setMessage({ type: 'error', text: 'AI scan failed: ' + err.message });
-  }
-
-  setScanning(false);
-};
+    setScanning(false);
+  };
 
   return (
     <div>
       <h1>Admin: Add Tool</h1>
-      <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
-        <button onClick={onBack}>Check Out Tool</button>
-        <button onClick={onViewTools}>View Tools</button>
+      <div style={{ marginBottom: '1rem' }}>
+        <button onClick={onHome}>Home</button>
       </div>
 
       <form onSubmit={handleAddTool} style={{ maxWidth: '400px' }}>
