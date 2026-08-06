@@ -47,7 +47,9 @@ function ToolStatus({ onHome, isAdmin }) {
   }, []);
 
   const available = tools.filter((t) => !t.is_checked_out);
-  const checkedOut = tools.filter((t) => t.is_checked_out);
+  const checkedOut = tools
+  .filter((t) => t.is_checked_out)
+  .sort((a, b) => new Date(a.checked_out_at) - new Date(b.checked_out_at));
 
   if (loading) return <p>Loading tool status...</p>;
 
