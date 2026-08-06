@@ -222,7 +222,7 @@ function QrTest({ techProfile }) {
         {tool && (
           <div style={{ textAlign: 'center', padding: '2rem' }}>
             <div style={{ fontSize: '4rem', color: 'green' }}>✅</div>
-            <p style={{ color: 'green', fontWeight: 'bold', margin: 0 }}>Tool Found</p>
+            <p style={{ color: 'green', fontWeight: 'bold', marginTop: '1rem', marginBottom: 0 }}>Tool Found</p>
           </div>
         )}
       </div>
