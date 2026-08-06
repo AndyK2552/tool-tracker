@@ -19,7 +19,7 @@ const formatDuration = (checkedOutAt) => {
   return parts.join(' ');
 };
 
-function ToolStatus({ onBack, onAddTool, isAdmin }) {
+function ToolStatus({ onHome, isAdmin }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,11 +36,11 @@ function ToolStatus({ onBack, onAddTool, isAdmin }) {
   };
 
   useEffect(() => {
-    fetchTools(); // initial load
+    fetchTools();
 
     const interval = setInterval(() => {
       fetchTools();
-    }, 15000); // refresh every 15 seconds
+    }, 15000);
 
     return () => clearInterval(interval);
   }, []);
@@ -52,10 +52,9 @@ function ToolStatus({ onBack, onAddTool, isAdmin }) {
 
   return (
     <div style={{ padding: '1rem' }}>
-      <button onClick={onBack} style={{ marginBottom: '1rem' }}>Check Out Tool</button>
-      {isAdmin && (
-        <button onClick={onAddTool} style={{ marginBottom: '1rem', marginLeft: '0.5rem' }}>Add New Tool</button>
-        )}
+      <button onClick={onHome} style={{ marginBottom: '1rem' }}>
+        {isAdmin ? 'Home' : 'Go to Scanner'}
+      </button>
       <h1>Tool Status</h1>
 
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
@@ -81,17 +80,17 @@ function ToolStatus({ onBack, onAddTool, isAdmin }) {
           {checkedOut.length === 0 && <p>No tools currently checked out.</p>}
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {checkedOut.map((tool) => (
-            <li key={tool.id} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
+              <li key={tool.id} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
                 <span style={{ color: 'red', marginRight: '0.5rem' }}>●</span>
                 <strong>{tool.name}</strong>
                 <br />
                 <span style={{ fontSize: '0.85rem', color: '#666', marginLeft: '1.2rem' }}>
-                Checked out by: {tool.checked_out_by}
-                {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}
-                <br />
-                Duration: {formatDuration(tool.checked_out_at)}
+                  Checked out by: {tool.checked_out_by}
+                  {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}
+                  <br />
+                  Duration: {formatDuration(tool.checked_out_at)}
                 </span>
-            </li>
+              </li>
             ))}
           </ul>
         </div>
