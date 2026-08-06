@@ -1,0 +1,18 @@
+// Your database stores timestamps as plain UTC (no timezone info attached).
+// This treats any stored timestamp as UTC and formats it in Eastern time
+// for display, regardless of what timezone the viewer's device is set to.
+export const formatEastern = (timestamp) => {
+  if (!timestamp) return '—';
+
+  const utcString = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
+  const date = new Date(utcString);
+
+  return date.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};

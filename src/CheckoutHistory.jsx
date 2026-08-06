@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from './supabaseClient';
+import { formatEastern } from './dateUtils';
 
 const COLUMNS = [
   { key: 'tool_name', label: 'Tool Name' },
@@ -243,7 +244,7 @@ function CheckoutHistory({ onHome }) {
               <tr key={row.id}>
                 {COLUMNS.map((col) => (
                   <td key={col.key} style={{ border: '1px solid #ddd', padding: '0.5rem', fontSize: '0.9rem' }}>
-                    {row[col.key] ?? '—'}
+                    {col.key === 'timestamp' ? formatEastern(row[col.key]) : (row[col.key] ?? '—')}
                   </td>
                 ))}
               </tr>
