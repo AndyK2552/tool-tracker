@@ -24,8 +24,13 @@ function AdminPage({ onBack, onViewTools }) {
       });
 
     if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
+  if (error.code === '23505') {
+    setMessage({ type: 'error', text: `A tool with serial number "${serial.trim()}" already exists.` });
+  } else {
+    setMessage({ type: 'error', text: error.message });
+  }
+} 
+    else {
       setMessage({ type: 'success', text: `Added "${name}" successfully.` });
       setName('');
       setSerial('');
@@ -72,7 +77,7 @@ function AdminPage({ onBack, onViewTools }) {
     <div>
       <h1>Admin: Add Tool</h1>
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
-        <button onClick={onBack}>← Back to Scanner</button>
+        <button onClick={onBack}>Go to Scanner</button>
         <button onClick={onViewTools}>View Tools</button>
       </div>
 

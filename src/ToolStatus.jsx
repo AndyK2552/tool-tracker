@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 
-function ToolStatus({ onBack }) {
+function ToolStatus({ onBack, onAddTool, isAdmin }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +34,10 @@ function ToolStatus({ onBack }) {
 
   return (
     <div style={{ padding: '1rem' }}>
-      <button onClick={onBack} style={{ marginBottom: '1rem' }}>← Back to Scanner</button>
+      <button onClick={onBack} style={{ marginBottom: '1rem' }}>Go to Scanner</button>
+      {isAdmin && (
+        <button onClick={onAddTool} style={{ marginBottom: '1rem', marginLeft: '0.5rem' }}>Add New Tool</button>
+        )}
       <h1>Tool Status</h1>
 
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
