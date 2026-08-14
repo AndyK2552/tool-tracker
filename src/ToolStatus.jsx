@@ -20,7 +20,7 @@ const formatDuration = (checkedOutAt) => {
   return parts.join(' ');
 };
 
-function ToolStatus({ onHome, isAdmin }) {
+function ToolStatus({ onHome, onSelectTool, isAdmin }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,8 +48,8 @@ function ToolStatus({ onHome, isAdmin }) {
 
   const available = tools.filter((t) => !t.is_checked_out);
   const checkedOut = tools
-  .filter((t) => t.is_checked_out)
-  .sort((a, b) => new Date(a.checked_out_at) - new Date(b.checked_out_at));
+    .filter((t) => t.is_checked_out)
+    .sort((a, b) => new Date(a.checked_out_at) - new Date(b.checked_out_at));
 
   if (loading) return <p>Loading tool status...</p>;
 
@@ -66,7 +66,11 @@ function ToolStatus({ onHome, isAdmin }) {
           {available.length === 0 && <p>No tools currently available.</p>}
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {available.map((tool) => (
-              <li key={tool.id} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
+              <li
+                key={tool.id}
+                onClick={() => isAdmin && onSelectTool(tool.id)}
+                style={{ padding: '0.5rem', borderBottom: '1px solid #eee', cursor: isAdmin ? 'pointer' : 'default' }}
+              >
                 <span style={{ color: 'green', marginRight: '0.5rem' }}>●</span>
                 <strong>{tool.name}</strong>
                 <br />
@@ -83,13 +87,17 @@ function ToolStatus({ onHome, isAdmin }) {
           {checkedOut.length === 0 && <p>No tools currently checked out.</p>}
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {checkedOut.map((tool) => (
-              <li key={tool.id} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}>
+              <li
+                key={tool.id}
+                onClick={() => isAdmin && onSelectTool(tool.id)}
+                style={{ padding: '0.5rem', borderBottom: '1px solid #eee', cursor: isAdmin ? 'pointer' : 'default' }}
+              >
                 <span style={{ color: 'red', marginRight: '0.5rem' }}>●</span>
                 <strong>{tool.name}</strong>
                 <br />
                 <span style={{ fontSize: '0.85rem', color: '#666', marginLeft: '1.2rem' }}>
-                    {tool.id}
-                    <br />
+                  {tool.id}
+                  <br />
                   Checked out by: {tool.checked_out_by}
                   {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}
                   <br />

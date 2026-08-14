@@ -14,7 +14,7 @@ function AdminHome({ onNavigate }) {
     <div style={{ padding: '1rem' }}>
       <h1>Admin Home</h1>
       <button style={buttonStyle} onClick={() => onNavigate('scanner')}>📷 Check Out Tool</button>
-      <button style={buttonStyle} onClick={() => onNavigate('status')}>📋 View Tools</button>
+      <button style={buttonStyle} onClick={() => onNavigate('status')}>📋 Manage Tools</button>
       <button style={buttonStyle} onClick={() => onNavigate('admin')}>➕ Add New Tool</button>
       <button style={buttonStyle} onClick={() => onNavigate('history')}>🕘 Checkout History</button>
     </div>

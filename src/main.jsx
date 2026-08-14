@@ -9,6 +9,7 @@ import { supabase } from './supabaseClient.js'
 import { StrictMode, useState, useEffect, useRef } from 'react'
 import AdminHome from './AdminHome.jsx'
 import CheckoutHistory from './CheckoutHistory.jsx'
+import ToolDetail from './ToolDetail.jsx'
 
 function Root() {
   const [session, setSession] = useState(null)
@@ -16,6 +17,7 @@ function Root() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState('scanner')
   const hasSetInitialView = useRef(false)
+  const [selectedToolId, setSelectedToolId] = useState(null)
 
   const loadProfile = async (userId) => {
     const { data } = await supabase
@@ -42,13 +44,16 @@ function Root() {
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session)
-      if (session) {
-        await loadProfile(session.user.id)
-      } else {
-        setProfile(null)
-      }
-    })
+  setSession(session)
+  setView('scanner')
+  hasSetInitialView.current = false
+
+  if (session) {
+    await loadProfile(session.user.id)
+  } else {
+    setProfile(null)
+  }
+})
 
     return () => listener.subscription.unsubscribe()
   }, [])
@@ -75,7 +80,21 @@ function Root() {
   return (
     <ToolStatus
       onHome={() => setView(profile.is_admin ? 'home' : 'scanner')}
+      onSelectTool={(id) => {
+        setSelectedToolId(id)
+        setView('toolDetail')
+      }}
       isAdmin={profile.is_admin}
+    />
+  )
+}
+
+if (view === 'toolDetail') {
+  return (
+    <ToolDetail
+      toolId={selectedToolId}
+      onHome={() => setView('home')}
+      onBackToStatus={() => setView('status')}
     />
   )
 }
