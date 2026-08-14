@@ -72,13 +72,13 @@ function Root() {
   }
 
   if (view === 'status') {
-    return (
-      <ToolStatus
-        onHome={() => setView('home')}
-        isAdmin={profile.is_admin}
-      />
-    )
-  }
+  return (
+    <ToolStatus
+      onHome={() => setView(profile.is_admin ? 'home' : 'scanner')}
+      isAdmin={profile.is_admin}
+    />
+  )
+}
 
   if (view === 'history') {
     return <CheckoutHistory onHome={() => setView('home')} />
