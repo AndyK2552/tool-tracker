@@ -105,14 +105,16 @@ function Root() {
   }
 
   if (view === 'toolDetail') {
-    return (
-      <ToolDetail
-        toolId={selectedToolId}
-        onHome={() => setView('home')}
-        onBackToStatus={() => setView('status')}
-      />
-    )
-  }
+  return (
+    <ToolDetail
+      toolId={selectedToolId}
+      isAdmin={profile.is_admin}
+      techProfile={profile}
+      onHome={() => setView('home')}
+      onBackToStatus={() => setView('status')}
+    />
+  )
+}
 
   if (view === 'history') {
     return <CheckoutHistory onHome={() => setView('home')} />

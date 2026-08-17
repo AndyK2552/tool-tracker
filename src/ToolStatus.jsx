@@ -68,8 +68,8 @@ function ToolStatus({ onHome, onSelectTool, isAdmin }) {
             {available.map((tool) => (
               <li
                 key={tool.id}
-                onClick={() => isAdmin && onSelectTool(tool.id)}
-                style={{ padding: '0.5rem', borderBottom: '1px solid #eee', cursor: isAdmin ? 'pointer' : 'default' }}
+                onClick={() => onSelectTool(tool.id)}
+                style={{ padding: '0.5rem', borderBottom: '1px solid #eee', cursor: 'pointer' }}
               >
                 <span style={{ color: 'green', marginRight: '0.5rem' }}>●</span>
                 <strong>{tool.name}</strong>
@@ -89,8 +89,8 @@ function ToolStatus({ onHome, onSelectTool, isAdmin }) {
             {checkedOut.map((tool) => (
               <li
                 key={tool.id}
-                onClick={() => isAdmin && onSelectTool(tool.id)}
-                style={{ padding: '0.5rem', borderBottom: '1px solid #eee', cursor: isAdmin ? 'pointer' : 'default' }}
+                onClick={() => onSelectTool(tool.id)}
+                style={{ padding: '0.5rem', borderBottom: '1px solid #eee', cursor: 'pointer' }}
               >
                 <span style={{ color: 'red', marginRight: '0.5rem' }}>●</span>
                 <strong>{tool.name}</strong>

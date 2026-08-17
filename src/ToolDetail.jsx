@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 
-function ToolDetail({ toolId, onHome, onBackToStatus }) {
+function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
   const [tool, setTool] = useState(null);
   const [techs, setTechs] = useState([]);
   const [selectedTech, setSelectedTech] = useState('');
@@ -15,6 +15,7 @@ function ToolDetail({ toolId, onHome, onBackToStatus }) {
   };
 
   const fetchTechs = async () => {
+    if (!isAdmin) return;
     const { data } = await supabase.from('profiles').select('name').order('name');
     setTechs(data || []);
   };
@@ -63,8 +64,8 @@ function ToolDetail({ toolId, onHome, onBackToStatus }) {
     setMessage({ type: 'success', text: 'Tool returned.' });
   };
 
-  const handleCheckOut = async () => {
-    if (!selectedTech) {
+  const handleCheckOut = async (techName) => {
+    if (!techName) {
       setMessage({ type: 'error', text: 'Please select a tech first.' });
       return;
     }
@@ -75,7 +76,7 @@ function ToolDetail({ toolId, onHome, onBackToStatus }) {
       .from('tools')
       .update({
         is_checked_out: true,
-        checked_out_by: selectedTech,
+        checked_out_by: techName,
         checked_out_at: now,
         overdue_alert_sent: false,
       })
@@ -92,20 +93,24 @@ function ToolDetail({ toolId, onHome, onBackToStatus }) {
       tool_name: tool.name,
       tool_id: tool.id,
       action: 'checked_out',
-      tech_name: selectedTech,
+      tech_name: techName,
       timestamp: now,
     });
 
     setTool(data);
-    setMessage({ type: 'success', text: `Checked out to ${selectedTech}.` });
+    setMessage({ type: 'success', text: `Checked out to ${techName}.` });
   };
 
   if (loading) return <p>Loading...</p>;
   if (!tool) return <p>Tool not found.</p>;
 
+  const canReturn = isAdmin || tool.checked_out_by === techProfile?.name;
+
   return (
     <div style={{ padding: '1rem' }}>
-      <button onClick={onHome} style={{ marginBottom: '1rem' }}>Home</button>
+      <button onClick={isAdmin ? onHome : onBackToStatus} style={{ marginBottom: '1rem' }}>
+        {isAdmin ? 'Home' : 'Back to Tool Status'}
+      </button>
 
       <h1>{tool.name}</h1>
 
@@ -116,8 +121,14 @@ function ToolDetail({ toolId, onHome, onBackToStatus }) {
         <p><strong>Condition:</strong> {tool.condition}</p>
 
         {tool.is_checked_out ? (
-          <button onClick={handleReturn} style={{ marginTop: '0.5rem' }}>Return</button>
-        ) : (
+          canReturn ? (
+            <button onClick={handleReturn} style={{ marginTop: '0.5rem' }}>Return</button>
+          ) : (
+            <button disabled title={`Only ${tool.checked_out_by} or an admin can return this tool`} style={{ marginTop: '0.5rem' }}>
+              Return
+            </button>
+          )
+        ) : isAdmin ? (
           <div style={{ marginTop: '0.5rem' }}>
             <select
               value={selectedTech}
@@ -129,13 +140,19 @@ function ToolDetail({ toolId, onHome, onBackToStatus }) {
                 <option key={t.name} value={t.name}>{t.name}</option>
               ))}
             </select>
-            <button onClick={handleCheckOut}>Check Out</button>
+            <button onClick={() => handleCheckOut(selectedTech)}>Check Out</button>
           </div>
+        ) : (
+          <button onClick={() => handleCheckOut(techProfile.name)} style={{ marginTop: '0.5rem' }}>
+            Check Out
+          </button>
         )}
 
-        <div style={{ marginTop: '1rem' }}>
-          <button onClick={handleDelete} style={{ color: 'red' }}>Delete Tool</button>
-        </div>
+        {isAdmin && (
+          <div style={{ marginTop: '1rem' }}>
+            <button onClick={handleDelete} style={{ color: 'red' }}>Delete Tool</button>
+          </div>
+        )}
       </div>
 
       {message && (
