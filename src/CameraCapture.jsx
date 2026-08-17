@@ -68,21 +68,48 @@ function CameraCapture({ onCapture, capturing, label = 'Capture Photo' }) {
   return (
     <div>
       {cameraError && <p style={{ color: 'red' }}>{cameraError}</p>}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        style={{ width: '100%', borderRadius: '4px', background: '#000' }}
-      />
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
-      <button
-        onClick={handleCapture}
-        disabled={!ready || capturing}
-        style={{ marginTop: '0.75rem', width: '100%', padding: '0.75rem', fontWeight: 'bold' }}
-      >
-        {capturing ? 'Analyzing photo...' : `📷 ${label}`}
-      </button>
+
+      <div style={{ position: 'relative' }}>
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          style={{ width: '100%', borderRadius: '4px', background: '#000', display: 'block' }}
+        />
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '16px',
+            left: 0,
+            right: 0,
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <button
+            onClick={handleCapture}
+            disabled={!ready || capturing}
+            aria-label={label}
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              border: '4px solid white',
+              background: capturing ? '#999' : 'white',
+              boxShadow: '0 0 0 2px rgba(0,0,0,0.4)',
+              cursor: ready && !capturing ? 'pointer' : 'default',
+              padding: 0,
+            }}
+          />
+        </div>
+      </div>
+
+      <p style={{ textAlign: 'center', fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
+        {capturing ? 'Analyzing photo...' : ready ? 'Tap the shutter to capture' : 'Starting camera...'}
+      </p>
     </div>
   );
 }
