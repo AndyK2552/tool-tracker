@@ -8,7 +8,7 @@ function AdminPage({ onHome }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [scanning, setScanning] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
+  const [showCamera, setShowCamera] = useState(true);
 
   const handleAddTool = async (e) => {
     e.preventDefault();
@@ -76,6 +76,22 @@ function AdminPage({ onHome }) {
         <button onClick={onHome}>Home</button>
       </div>
 
+      <div style={{ marginBottom: '1rem', maxWidth: '400px' }}>
+        {showCamera ? (
+          <CameraCapture onCapture={handleAICapture} capturing={scanning} label="Capture Tool Label" />
+        ) : (
+          <button type="button" onClick={() => setShowCamera(true)}>
+            🤖 Scan Tool
+          </button>
+        )}
+      </div>
+
+      {message && (
+        <p style={{ color: message.type === 'error' ? 'red' : message.type === 'info' ? '#666' : 'green', marginBottom: '1rem' }}>
+          {message.text}
+        </p>
+      )}
+
       <form onSubmit={handleAddTool} style={{ maxWidth: '400px' }}>
         <label>Tool Name</label>
         <input
@@ -92,29 +108,13 @@ function AdminPage({ onHome }) {
           value={serial}
           onChange={(e) => setSerial(e.target.value)}
           required
-          style={{ display: 'block', width: '100%', padding: '0.5rem', marginBottom: '0.5rem' }}
+          style={{ display: 'block', width: '100%', padding: '0.5rem', marginBottom: '1rem' }}
         />
-
-        <div style={{ marginBottom: '1rem' }}>
-          {showCamera ? (
-            <CameraCapture onCapture={handleAICapture} capturing={scanning} label="Capture Tool Label" />
-          ) : (
-            <button type="button" onClick={() => setShowCamera(true)}>
-              🤖 Scan Tool with AI
-            </button>
-          )}
-        </div>
 
         <button type="submit" disabled={saving}>
           {saving ? 'Adding...' : 'Add Tool'}
         </button>
       </form>
-
-      {message && (
-        <p style={{ color: message.type === 'error' ? 'red' : message.type === 'info' ? '#666' : 'green', marginTop: '1rem' }}>
-          {message.text}
-        </p>
-      )}
     </div>
   );
 }

@@ -205,49 +205,44 @@ function QrTest({ techProfile }) {
     <div>
       <h1>Check-Out Tool</h1>
 
-      <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1rem' }}>
-        <div style={{ display: tool ? 'none' : 'block' }}>
-          {mode === 'ai' ? (
-            <div>
-              <p style={{ fontSize: '0.9rem', color: '#333', marginBottom: '0.75rem' }}>
-                Point the camera at the tool's serial number, then tap to capture.
-              </p>
-              <CameraCapture onCapture={handleAICapture} capturing={scanningWithAI} label="Capture Serial Number" />
+      <div style={{ display: tool ? 'none' : 'block' }}>
+        {mode === 'ai' ? (
+          <div>
+            <CameraCapture onCapture={handleAICapture} capturing={scanningWithAI} label="Capture Serial Number" />
 
-              <p style={{ marginTop: '1rem' }}>
-                <button
-                  onClick={() => setMode('qr')}
-                  style={{ fontSize: '0.85rem', color: '#666', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
-                >
-                  Scan QR code instead
-                </button>
-              </p>
-            </div>
-          ) : (
-            <div>
-              <div id="qr-reader" style={{ width: '100%' }}></div>
-
-              <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem' }}>
-                Point the camera at the tool's QR code — it'll scan automatically.
-              </p>
-
+            <p style={{ marginTop: '0.75rem' }}>
               <button
-                onClick={() => setMode('ai')}
-                style={{ fontSize: '0.85rem', color: '#666', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0, marginTop: '0.5rem' }}
+                onClick={() => setMode('qr')}
+                style={{ fontSize: '0.85rem', color: '#666', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
               >
-                Use photo scan instead
+                Scan QR code instead
               </button>
-            </div>
-          )}
-        </div>
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div id="qr-reader" style={{ width: '100%' }}></div>
 
-        {tool && (
-          <div style={{ textAlign: 'center', padding: '2rem' }}>
-            <div style={{ fontSize: '4rem', color: 'green', lineHeight: 1 }}>✅</div>
-            <p style={{ color: 'green', fontWeight: 'bold', marginTop: '1rem', marginBottom: 0 }}>Tool Found</p>
+            <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem' }}>
+              Point the camera at the tool's QR code — it'll scan automatically.
+            </p>
+
+            <button
+              onClick={() => setMode('ai')}
+              style={{ fontSize: '0.85rem', color: '#666', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0, marginTop: '0.5rem' }}
+            >
+              Use photo scan instead
+            </button>
           </div>
         )}
       </div>
+
+      {tool && (
+        <div style={{ textAlign: 'center', padding: '2rem', border: '1px solid #ddd', borderRadius: '8px' }}>
+          <div style={{ fontSize: '4rem', color: 'green', lineHeight: 1 }}>✅</div>
+          <p style={{ color: 'green', fontWeight: 'bold', marginTop: '1rem', marginBottom: 0 }}>Tool Found</p>
+        </div>
+      )}
 
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
