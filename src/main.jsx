@@ -15,9 +15,9 @@ function Root() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState('scanner')
-  const hasSetInitialView = useRef(false)
-  const [selectedToolId, setSelectedToolId] = useState(null)
+  const [view, setView] = useState(() => sessionStorage.getItem('view') || 'scanner')
+  const [selectedToolId, setSelectedToolId] = useState(() => sessionStorage.getItem('selectedToolId') || null)
+  const hasSetInitialView = useRef(sessionStorage.getItem('view') !== null)
 
   const loadProfile = async (userId) => {
     const { data } = await supabase
@@ -44,22 +44,34 @@ function Root() {
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-  setSession(session)
+      setSession(session)
 
-  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-    setView('scanner')
-    hasSetInitialView.current = false
-  }
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        setView('scanner')
+        hasSetInitialView.current = false
+        sessionStorage.removeItem('view')
+        sessionStorage.removeItem('selectedToolId')
+      }
 
-  if (session) {
-    await loadProfile(session.user.id)
-  } else {
-    setProfile(null)
-  }
-})
+      if (session) {
+        await loadProfile(session.user.id)
+      } else {
+        setProfile(null)
+      }
+    })
 
     return () => listener.subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    sessionStorage.setItem('view', view)
+  }, [view])
+
+  useEffect(() => {
+    if (selectedToolId) {
+      sessionStorage.setItem('selectedToolId', selectedToolId)
+    }
+  }, [selectedToolId])
 
   if (loading) return <p>Loading...</p>
 
@@ -80,27 +92,27 @@ function Root() {
   }
 
   if (view === 'status') {
-  return (
-    <ToolStatus
-      onHome={() => setView(profile.is_admin ? 'home' : 'scanner')}
-      onSelectTool={(id) => {
-        setSelectedToolId(id)
-        setView('toolDetail')
-      }}
-      isAdmin={profile.is_admin}
-    />
-  )
-}
+    return (
+      <ToolStatus
+        onHome={() => setView(profile.is_admin ? 'home' : 'scanner')}
+        onSelectTool={(id) => {
+          setSelectedToolId(id)
+          setView('toolDetail')
+        }}
+        isAdmin={profile.is_admin}
+      />
+    )
+  }
 
-if (view === 'toolDetail') {
-  return (
-    <ToolDetail
-      toolId={selectedToolId}
-      onHome={() => setView('home')}
-      onBackToStatus={() => setView('status')}
-    />
-  )
-}
+  if (view === 'toolDetail') {
+    return (
+      <ToolDetail
+        toolId={selectedToolId}
+        onHome={() => setView('home')}
+        onBackToStatus={() => setView('status')}
+      />
+    )
+  }
 
   if (view === 'history') {
     return <CheckoutHistory onHome={() => setView('home')} />
