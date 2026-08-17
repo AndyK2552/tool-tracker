@@ -1,13 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
-import { resizeImage } from './imageUtils';
+import CameraCapture from './CameraCapture';
 
 function QrTest({ techProfile }) {
   const [tool, setTool] = useState(null);
   const [error, setError] = useState(null);
   const [scanningWithAI, setScanningWithAI] = useState(false);
-  const [mode, setMode] = useState('ai'); // 'ai' or 'qr'
+  const [mode, setMode] = useState('ai');
   const scannerRef = useRef(null);
 
   const scanForTool = async (decodedText) => {
@@ -26,20 +26,15 @@ function QrTest({ techProfile }) {
     }
   };
 
-  const handleAIScan = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
+  const handleAICapture = async (base64) => {
     setScanningWithAI(true);
     setError(null);
 
     try {
-      const resizedBase64 = await resizeImage(file, 1024);
-
       const response = await fetch('/api/analyze-tool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: resizedBase64, mediaType: 'image/jpeg' }),
+        body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' }),
       });
 
       const result = await response.json();
@@ -60,7 +55,6 @@ function QrTest({ techProfile }) {
     setScanningWithAI(false);
   };
 
-  // Only start the live QR scanner when the tech explicitly switches to QR mode
   useEffect(() => {
     if (mode !== 'qr') return;
 
@@ -216,19 +210,9 @@ function QrTest({ techProfile }) {
           {mode === 'ai' ? (
             <div>
               <p style={{ fontSize: '0.9rem', color: '#333', marginBottom: '0.75rem' }}>
-                Take a photo of the tool's serial number.
+                Point the camera at the tool's serial number, then tap to capture.
               </p>
-              <label style={{ display: 'inline-block', padding: '0.75rem 1.25rem', border: '1px solid #333', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                {scanningWithAI ? 'Analyzing photo...' : '📷 Scan Serial Number'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleAIScan}
-                  disabled={scanningWithAI}
-                  style={{ display: 'none' }}
-                />
-              </label>
+              <CameraCapture onCapture={handleAICapture} capturing={scanningWithAI} label="Capture Serial Number" />
 
               <p style={{ marginTop: '1rem' }}>
                 <button

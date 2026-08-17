@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from './supabaseClient';
-import { resizeImage } from './imageUtils';
+import CameraCapture from './CameraCapture';
 
 function AdminPage({ onHome }) {
   const [name, setName] = useState('');
@@ -8,6 +8,7 @@ function AdminPage({ onHome }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
 
   const handleAddTool = async (e) => {
     e.preventDefault();
@@ -37,20 +38,15 @@ function AdminPage({ onHome }) {
     setSaving(false);
   };
 
-  const handleImageCapture = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
+  const handleAICapture = async (base64) => {
     setScanning(true);
     setMessage(null);
 
     try {
-      const resizedBase64 = await resizeImage(file, 1024);
-
       const response = await fetch('/api/analyze-tool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: resizedBase64, mediaType: file.type }),
+        body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' }),
       });
 
       const result = await response.json();
@@ -65,6 +61,7 @@ function AdminPage({ onHome }) {
         type: 'info',
         text: 'Detected — please review and correct below before saving.',
       });
+      setShowCamera(false);
     } catch (err) {
       setMessage({ type: 'error', text: 'AI scan failed: ' + err.message });
     }
@@ -99,17 +96,13 @@ function AdminPage({ onHome }) {
         />
 
         <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ccc', cursor: 'pointer' }}>
-            {scanning ? 'Analyzing photo...' : '🤖 Scan Tool with AI'}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleImageCapture}
-              disabled={scanning}
-              style={{ display: 'none' }}
-            />
-          </label>
+          {showCamera ? (
+            <CameraCapture onCapture={handleAICapture} capturing={scanning} label="Capture Tool Label" />
+          ) : (
+            <button type="button" onClick={() => setShowCamera(true)}>
+              🤖 Scan Tool with AI
+            </button>
+          )}
         </div>
 
         <button type="submit" disabled={saving}>
