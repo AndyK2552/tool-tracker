@@ -15,9 +15,9 @@ function Root() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState(() => sessionStorage.getItem('view') || 'scanner')
-  const [selectedToolId, setSelectedToolId] = useState(() => sessionStorage.getItem('selectedToolId') || null)
-  const hasSetInitialView = useRef(sessionStorage.getItem('view') !== null)
+  const [view, setView] = useState(() => localStorage.getItem('view') || 'scanner')
+  const [selectedToolId, setSelectedToolId] = useState(() => localStorage.getItem('selectedToolId') || null)
+  const hasSetInitialView = useRef(localStorage.getItem('view') !== null)
 
   const loadProfile = async (userId) => {
     const { data } = await supabase
@@ -49,8 +49,8 @@ function Root() {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         setView('scanner')
         hasSetInitialView.current = false
-        sessionStorage.removeItem('view')
-        sessionStorage.removeItem('selectedToolId')
+        localStorage.removeItem('view')
+        localStorage.removeItem('selectedToolId')
       }
 
       if (session) {
@@ -64,12 +64,12 @@ function Root() {
   }, [])
 
   useEffect(() => {
-    sessionStorage.setItem('view', view)
+    localStorage.setItem('view', view)
   }, [view])
 
   useEffect(() => {
     if (selectedToolId) {
-      sessionStorage.setItem('selectedToolId', selectedToolId)
+      localStorage.setItem('selectedToolId', selectedToolId)
     }
   }, [selectedToolId])
 
