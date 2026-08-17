@@ -88,7 +88,7 @@ function Root() {
   }
 
   if (view === 'home') {
-    return <AdminHome onNavigate={(v) => setView(v)} />
+    return <AdminHome onNavigate={(v) => setView(v)} techName={profile.name} />
   }
 
   if (view === 'status') {

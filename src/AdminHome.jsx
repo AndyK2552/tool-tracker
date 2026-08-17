@@ -1,7 +1,8 @@
+import { Camera, ClipboardList, Plus, Clock } from 'lucide-react';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
 
-function AdminHome({ onNavigate }) {
+function AdminHome({ onNavigate, techName }) {
   const cardStyle = {
     background: colors.navyLight,
     border: `0.5px solid ${colors.navyBorder}`,
@@ -9,13 +10,17 @@ function AdminHome({ onNavigate }) {
     padding: '14px 12px',
     cursor: 'pointer',
     textAlign: 'left',
+    aspectRatio: '1 / 1',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
   };
 
   const buttons = [
-    { key: 'scanner', icon: '📷', label: 'Check out tool' },
-    { key: 'status', icon: '📋', label: 'Manage tools' },
-    { key: 'admin', icon: '➕', label: 'Add new tool' },
-    { key: 'history', icon: '🕘', label: 'Checkout history' },
+    { key: 'scanner', icon: Camera, label: 'Check out tool' },
+    { key: 'status', icon: ClipboardList, label: 'Manage tools' },
+    { key: 'admin', icon: Plus, label: 'Add new tool' },
+    { key: 'history', icon: Clock, label: 'Checkout history' },
   ];
 
   return (
@@ -24,23 +29,28 @@ function AdminHome({ onNavigate }) {
 
       <div style={{ padding: '1.25rem' }}>
         <p style={{ fontSize: '12px', color: colors.textMuted, margin: '0 0 4px' }}>Admin home</p>
+        <p style={{ fontSize: '18px', fontWeight: 500, color: colors.white, margin: '0 0 1.25rem' }}>
+          Good morning, {techName}
+        </p>
 
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, minmax(0,1fr))',
             gap: '10px',
-            marginTop: '1rem',
           }}
         >
-          {buttons.map((b) => (
-            <button key={b.key} onClick={() => onNavigate(b.key)} style={cardStyle}>
-              <div style={{ fontSize: '22px', color: colors.blueAccent }}>{b.icon}</div>
-              <p style={{ fontSize: '13px', fontWeight: 500, margin: '10px 0 0', color: colors.white }}>
-                {b.label}
-              </p>
-            </button>
-          ))}
+          {buttons.map((b) => {
+            const Icon = b.icon;
+            return (
+              <button key={b.key} onClick={() => onNavigate(b.key)} style={cardStyle}>
+                <Icon size={22} color={colors.blueAccent} />
+                <p style={{ fontSize: '13px', fontWeight: 500, margin: 0, color: colors.white }}>
+                  {b.label}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
