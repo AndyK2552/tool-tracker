@@ -43,10 +43,13 @@ function Root() {
       setLoading(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
   setSession(session)
-  setView('scanner')
-  hasSetInitialView.current = false
+
+  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+    setView('scanner')
+    hasSetInitialView.current = false
+  }
 
   if (session) {
     await loadProfile(session.user.id)

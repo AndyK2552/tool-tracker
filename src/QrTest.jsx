@@ -7,6 +7,7 @@ function QrTest({ techProfile }) {
   const [tool, setTool] = useState(null);
   const [error, setError] = useState(null);
   const [scanningWithAI, setScanningWithAI] = useState(false);
+  const [mode, setMode] = useState('ai'); // 'ai' or 'qr'
   const scannerRef = useRef(null);
 
   const scanForTool = async (decodedText) => {
@@ -59,7 +60,10 @@ function QrTest({ techProfile }) {
     setScanningWithAI(false);
   };
 
+  // Only start the live QR scanner when the tech explicitly switches to QR mode
   useEffect(() => {
+    if (mode !== 'qr') return;
+
     const scanner = new Html5QrcodeScanner(
       'qr-reader',
       {
@@ -86,7 +90,7 @@ function QrTest({ techProfile }) {
         console.error('Failed to clear scanner', error);
       });
     };
-  }, []);
+  }, [mode]);
 
   const handleCheckOut = async () => {
     const now = new Date().toISOString();
@@ -97,6 +101,7 @@ function QrTest({ techProfile }) {
         is_checked_out: true,
         checked_out_by: techProfile.name,
         checked_out_at: now,
+        overdue_alert_sent: false,
       })
       .eq('id', tool.id)
       .select()
@@ -194,34 +199,67 @@ function QrTest({ techProfile }) {
     setTool(data);
   };
 
+  const resetScan = () => {
+    setTool(null);
+    setError(null);
+    if (scannerRef.current) {
+      scannerRef.current.resume();
+    }
+  };
+
   return (
     <div>
       <h1>Check-Out Tool</h1>
 
       <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1rem' }}>
         <div style={{ display: tool ? 'none' : 'block' }}>
-          <div id="qr-reader" style={{ width: '100%' }}></div>
+          {mode === 'ai' ? (
+            <div>
+              <p style={{ fontSize: '0.9rem', color: '#333', marginBottom: '0.75rem' }}>
+                Take a photo of the tool's serial number.
+              </p>
+              <label style={{ display: 'inline-block', padding: '0.75rem 1.25rem', border: '1px solid #333', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                {scanningWithAI ? 'Analyzing photo...' : '📷 Scan Serial Number'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleAIScan}
+                  disabled={scanningWithAI}
+                  style={{ display: 'none' }}
+                />
+              </label>
 
-          <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
-            Point the camera at the tool's QR code — it'll scan automatically.
-          </p>
+              <p style={{ marginTop: '1rem' }}>
+                <button
+                  onClick={() => setMode('qr')}
+                  style={{ fontSize: '0.85rem', color: '#666', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                >
+                  Scan QR code instead
+                </button>
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div id="qr-reader" style={{ width: '100%' }}></div>
 
-          <label style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', fontSize: '0.9rem' }}>
-            {scanningWithAI ? 'Analyzing photo...' : "Can't scan the code? Tap to photograph the serial number"}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleAIScan}
-              disabled={scanningWithAI}
-              style={{ display: 'none' }}
-            />
-          </label>
+              <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem' }}>
+                Point the camera at the tool's QR code — it'll scan automatically.
+              </p>
+
+              <button
+                onClick={() => setMode('ai')}
+                style={{ fontSize: '0.85rem', color: '#666', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0, marginTop: '0.5rem' }}
+              >
+                Use photo scan instead
+              </button>
+            </div>
+          )}
         </div>
 
         {tool && (
           <div style={{ textAlign: 'center', padding: '2rem' }}>
-            <div style={{ fontSize: '4rem', color: 'green' }}>✅</div>
+            <div style={{ fontSize: '4rem', color: 'green', lineHeight: 1 }}>✅</div>
             <p style={{ color: 'green', fontWeight: 'bold', marginTop: '1rem', marginBottom: 0 }}>Tool Found</p>
           </div>
         )}
@@ -237,35 +275,27 @@ function QrTest({ techProfile }) {
           <p><strong>Checked out by:</strong> {tool.checked_out_by || '—'}</p>
           <p><strong>Condition:</strong> {tool.condition}</p>
 
-              {!tool.is_checked_out ? (
-      <div style={{ marginTop: '1rem' }}>
-        <button onClick={handleCheckOut}>Check Out</button>
-      </div>
-    ) : (
-      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-        {(techProfile.is_admin || tool.checked_out_by === techProfile.name) ? (
-          <button onClick={handleReturn}>Return</button>
-        ) : (
-          <button disabled title={`Only ${tool.checked_out_by} or an admin can return this tool`}>
-            Return
-          </button>
-        )}
-        <button onClick={handleToggleCondition}>
-          Change Condition ({tool.condition === 'Ready' ? 'Mark Damaged' : 'Mark Ready'})
-        </button>
-      </div>
-    )}
+          {!tool.is_checked_out ? (
+            <div style={{ marginTop: '1rem' }}>
+              <button onClick={handleCheckOut}>Check Out</button>
+            </div>
+          ) : (
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+              {(techProfile.is_admin || tool.checked_out_by === techProfile.name) ? (
+                <button onClick={handleReturn}>Return</button>
+              ) : (
+                <button disabled title={`Only ${tool.checked_out_by} or an admin can return this tool`}>
+                  Return
+                </button>
+              )}
+              <button onClick={handleToggleCondition}>
+                Change Condition ({tool.condition === 'Ready' ? 'Mark Damaged' : 'Mark Ready'})
+              </button>
+            </div>
+          )}
 
           <div style={{ marginTop: '1rem' }}>
-            <button
-              onClick={() => {
-                setTool(null);
-                setError(null);
-                scannerRef.current?.resume();
-              }}
-            >
-              Scan Another Tool
-            </button>
+            <button onClick={resetScan}>Scan Another Tool</button>
           </div>
         </div>
       )}
