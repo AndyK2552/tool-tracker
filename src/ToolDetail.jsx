@@ -208,7 +208,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
           )}
 
           {isAdmin && (
-            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
               <button onClick={handleStartAssignQr} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
                 Assign QR Code
               </button>
