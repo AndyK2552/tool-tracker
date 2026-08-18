@@ -19,6 +19,31 @@ function Root() {
   const [view, setView] = useState(() => localStorage.getItem('view') || 'scanner')
   const [selectedToolId, setSelectedToolId] = useState(() => localStorage.getItem('selectedToolId') || null)
   const hasSetInitialView = useRef(localStorage.getItem('view') !== null)
+  const isPopStateRef = useRef(false)
+  const hasInitializedHistoryRef = useRef(false)
+
+  useEffect(() => {
+    if (isPopStateRef.current) {
+      isPopStateRef.current = false
+      return
+    }
+    if (!hasInitializedHistoryRef.current) {
+      hasInitializedHistoryRef.current = true
+      window.history.replaceState({ view, selectedToolId }, '')
+      return
+    }
+    window.history.pushState({ view, selectedToolId }, '')
+  }, [view, selectedToolId])
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      isPopStateRef.current = true
+      setView(event.state?.view || 'scanner')
+      setSelectedToolId(event.state?.selectedToolId || null)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   const loadProfile = async (userId) => {
     const { data } = await supabase
