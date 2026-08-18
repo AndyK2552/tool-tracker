@@ -4,12 +4,23 @@
 // is still pending (camera permission prompt not yet resolved). That
 // synchronous throw escapes a chained .catch() entirely and was crashing
 // the app with an uncaught error. These wrappers swallow it safely.
+//
+// clear() is separate and returns void, not a Promise — chaining .catch()
+// directly on it throws "Cannot read properties of undefined (reading 'catch')".
+
+function safeClear(scanner) {
+  try {
+    scanner.clear();
+  } catch {
+    // element already removed/cleared — nothing to do
+  }
+}
 
 export function safeStopScanner(scanner) {
   try {
-    scanner.stop().then(() => scanner.clear()).catch(() => {});
+    scanner.stop().then(() => safeClear(scanner)).catch(() => safeClear(scanner));
   } catch {
-    scanner.clear().catch(() => {});
+    safeClear(scanner);
   }
 }
 
