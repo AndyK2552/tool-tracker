@@ -1,17 +1,21 @@
 // Resizes an image file down to maxDimension on its longest side,
 // returns just the base64 data (no data URL prefix), as JPEG.
 //
-// Prefers createImageBitmap over an <img> element: it decodes off the DOM
-// entirely and — critically — lets us call bitmap.close() to free the
-// decoded full-resolution bitmap immediately, rather than waiting on
-// garbage collection. Native-camera photos can be 12+ megapixels, and on
-// memory-constrained Android phones the GC-timing gap was long enough for
-// the tab to be killed for out-of-memory before it ever ran.
+// Native-camera photos can be 12-50+ megapixels. Decoding one at full
+// resolution — even briefly, even with prompt cleanup — is itself enough
+// to crash the tab on memory-constrained Android phones. So instead of
+// decoding full-size and scaling down after, we ask createImageBitmap to
+// downscale *during* decode via resizeWidth: the browser's JPEG decoder
+// can scale while decoding (far cheaper than decode-then-scale), so the
+// full-resolution bitmap is never actually materialized in memory.
 export const resizeImage = async (file, maxDimension) => {
   if (typeof createImageBitmap === 'function') {
     let bitmap;
     try {
-      bitmap = await createImageBitmap(file);
+      bitmap = await createImageBitmap(file, {
+        resizeWidth: Math.max(maxDimension * 2, 1600),
+        resizeQuality: 'medium',
+      });
       return drawToJpeg(bitmap, maxDimension);
     } finally {
       bitmap?.close();
