@@ -24,7 +24,13 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const photoPanelRef = useRef(null);
 
   useEffect(() => {
-    if (assigningQr) qrPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!assigningQr || !qrPanelRef.current) return;
+    const el = qrPanelRef.current;
+    const observer = new ResizeObserver(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [assigningQr]);
 
   useEffect(() => {
@@ -32,7 +38,13 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   }, [assigningLocation]);
 
   useEffect(() => {
-    if (updatingPhoto) photoPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!updatingPhoto || !photoPanelRef.current) return;
+    const el = photoPanelRef.current;
+    const observer = new ResizeObserver(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [updatingPhoto]);
 
   const fetchTool = async () => {
@@ -80,6 +92,8 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const handleStartAssignQr = () => {
     setScannedQr('');
     setMessage(null);
+    setAssigningLocation(false);
+    setUpdatingPhoto(false);
     setAssigningQr(true);
   };
 
@@ -141,6 +155,8 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const handleStartAssignLocation = () => {
     setNewLocation(tool.location || '');
     setMessage(null);
+    setAssigningQr(false);
+    setUpdatingPhoto(false);
     setAssigningLocation(true);
   };
 
@@ -190,6 +206,8 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const handleStartUpdatePhoto = () => {
     setNewPhoto(null);
     setMessage(null);
+    setAssigningQr(false);
+    setAssigningLocation(false);
     setUpdatingPhoto(true);
   };
 
