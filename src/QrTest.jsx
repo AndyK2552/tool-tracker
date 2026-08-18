@@ -1,21 +1,18 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
-import CameraCapture from './CameraCapture';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
 
 function QrTest({ techProfile }) {
   const [tool, setTool] = useState(null);
   const [error, setError] = useState(null);
-  const [scanningWithAI, setScanningWithAI] = useState(false);
-  const [mode, setMode] = useState('ai');
   const scannerRef = useRef(null);
 
   const scanForTool = async (decodedText) => {
-    const { data, error } = await supabase.from('tools').select('*').eq('id', decodedText).single();
+    const { data, error } = await supabase.from('tools').select('*').eq('qr_code', decodedText).single();
     if (error || !data) {
-      setError(`No tool found for ID: ${decodedText}`);
+      setError(`No tool found for QR code: ${decodedText}`);
       setTool(null);
     } else {
       setTool(data);
@@ -23,31 +20,7 @@ function QrTest({ techProfile }) {
     }
   };
 
-  const handleAICapture = async (base64) => {
-    setScanningWithAI(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/analyze-tool', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Failed to analyze image');
-      if (!result.serial) {
-        setError('Could not detect a serial number in that photo. Try again with better lighting or a closer shot.');
-      } else {
-        await scanForTool(result.serial);
-      }
-    } catch (err) {
-      setError('AI scan failed: ' + err.message);
-    }
-    setScanningWithAI(false);
-  };
-
   useEffect(() => {
-    if (mode !== 'qr') return;
-
     const scanner = new Html5QrcodeScanner(
       'qr-reader',
       { fps: 10, videoConstraints: { facingMode: { exact: 'environment' } } },
@@ -66,7 +39,7 @@ function QrTest({ techProfile }) {
     return () => {
       scanner.clear().catch(() => {});
     };
-  }, [mode]);
+  }, []);
 
   const handleCheckOut = async () => {
     const now = new Date().toISOString();
@@ -130,7 +103,6 @@ function QrTest({ techProfile }) {
     if (scannerRef.current) scannerRef.current.resume();
   };
 
-  const linkStyle = { fontSize: '0.85rem', color: colors.textMuted, background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 };
   const cardStyle = { background: colors.navyLight, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '8px', padding: '1rem', marginTop: '1rem' };
   const btnStyle = { padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: colors.gold, color: colors.navy, fontWeight: 'bold', cursor: 'pointer' };
 
@@ -142,22 +114,10 @@ function QrTest({ techProfile }) {
         <h1 style={{ color: colors.white, fontSize: '20px' }}>Check-Out Tool</h1>
 
         <div style={{ display: tool ? 'none' : 'block' }}>
-          {mode === 'ai' ? (
-            <div>
-              <CameraCapture onCapture={handleAICapture} capturing={scanningWithAI} label="Capture Serial Number" />
-              <p style={{ marginTop: '0.75rem' }}>
-                <button onClick={() => setMode('qr')} style={linkStyle}>Scan QR code instead</button>
-              </p>
-            </div>
-          ) : (
-            <div>
-              <div id="qr-reader" style={{ width: '100%' }}></div>
-              <p style={{ fontSize: '0.85rem', color: colors.textMuted, marginTop: '0.75rem' }}>
-                Point the camera at the tool's QR code — it'll scan automatically.
-              </p>
-              <button onClick={() => setMode('ai')} style={{ ...linkStyle, marginTop: '0.5rem' }}>Use photo scan instead</button>
-            </div>
-          )}
+          <div id="qr-reader" style={{ width: '100%' }}></div>
+          <p style={{ fontSize: '0.85rem', color: colors.textMuted, marginTop: '0.75rem' }}>
+            Point the camera at the tool's QR code — it'll scan automatically.
+          </p>
         </div>
 
         {tool && (
