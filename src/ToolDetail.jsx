@@ -8,7 +8,7 @@ import { colors, btnStyle, secondaryBtnStyle } from './theme';
 function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSelectTool }) {
   const [tool, setTool] = useState(null);
   const [techs, setTechs] = useState([]);
-  const [selectedTech, setSelectedTech] = useState('');
+  const [selectedTech, setSelectedTech] = useState(techProfile?.name || '');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
   const [assigningQr, setAssigningQr] = useState(false);
