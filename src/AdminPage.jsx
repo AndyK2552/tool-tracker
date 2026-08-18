@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { supabase } from './supabaseClient';
 import CameraCapture from './CameraCapture';
+import { colors } from './theme';
+import PageHeader from './PageHeader';
 
 function AdminPage({ onHome }) {
   const [name, setName] = useState('');
@@ -17,12 +19,7 @@ function AdminPage({ onHome }) {
 
     const { error } = await supabase
       .from('tools')
-      .insert({
-        id: serial.trim(),
-        name: name.trim(),
-        is_checked_out: false,
-        condition: 'Ready',
-      });
+      .insert({ id: serial.trim(), name: name.trim(), is_checked_out: false, condition: 'Ready' });
 
     if (error) {
       if (error.code === '23505') {
@@ -41,80 +38,107 @@ function AdminPage({ onHome }) {
   const handleAICapture = async (base64) => {
     setScanning(true);
     setMessage(null);
-
     try {
       const response = await fetch('/api/analyze-tool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' }),
       });
-
       const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to analyze image');
-      }
-
+      if (!response.ok) throw new Error(result.error || 'Failed to analyze image');
       setName(result.name || '');
       setSerial(result.serial || '');
-      setMessage({
-        type: 'info',
-        text: 'Detected — please review and correct below before saving.',
-      });
+      setMessage({ type: 'info', text: 'Detected — please review and correct below before saving.' });
       setShowCamera(false);
     } catch (err) {
       setMessage({ type: 'error', text: 'AI scan failed: ' + err.message });
     }
-
     setScanning(false);
   };
 
+  const inputStyle = {
+    display: 'block',
+    width: '100%',
+    boxSizing: 'border-box',
+    padding: '0.6rem',
+    marginBottom: '1rem',
+    borderRadius: '6px',
+    border: 'none',
+  };
+
+  const btnStyle = {
+    padding: '0.6rem 1rem',
+    borderRadius: '6px',
+    border: 'none',
+    background: colors.gold,
+    color: colors.navy,
+    fontWeight: 'bold',
+    cursor: 'pointer',
+  };
+
+  const secondaryBtnStyle = {
+    ...btnStyle,
+    background: colors.navyLight,
+    color: colors.white,
+    border: `0.5px solid ${colors.navyBorder}`,
+  };
+
   return (
-    <div>
-      <h1>Admin: Add Tool</h1>
-      <div style={{ marginBottom: '1rem' }}>
-        <button onClick={onHome}>Home</button>
-      </div>
+    <div style={{ background: colors.navy, minHeight: '100vh' }}>
+      <PageHeader title="KYPD Tool Tracker" />
 
-      <div style={{ marginBottom: '1rem', maxWidth: '400px' }}>
-        {showCamera ? (
-          <CameraCapture onCapture={handleAICapture} capturing={scanning} label="Capture Tool Label" />
-        ) : (
-          <button type="button" onClick={() => setShowCamera(true)}>
-            🤖 Scan Tool
-          </button>
-        )}
-      </div>
+      <div style={{ padding: '1.25rem' }}>
+        <h1 style={{ color: colors.white, fontSize: '20px' }}>Admin: Add Tool</h1>
 
-      {message && (
-        <p style={{ color: message.type === 'error' ? 'red' : message.type === 'info' ? '#666' : 'green', marginBottom: '1rem' }}>
-          {message.text}
-        </p>
-      )}
-
-      <form onSubmit={handleAddTool} style={{ maxWidth: '400px' }}>
-        <label>Tool Name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          style={{ display: 'block', width: '100%', padding: '0.5rem', marginBottom: '1rem' }}
-        />
-
-        <label>Serial Number</label>
-        <input
-          type="text"
-          value={serial}
-          onChange={(e) => setSerial(e.target.value)}
-          required
-          style={{ display: 'block', width: '100%', padding: '0.5rem', marginBottom: '1rem' }}
-        />
-
-        <button type="submit" disabled={saving}>
-          {saving ? 'Adding...' : 'Add Tool'}
+        <button onClick={onHome} style={{ ...secondaryBtnStyle, marginBottom: '1rem' }}>
+          Home
         </button>
-      </form>
+
+        <div style={{ marginBottom: '1rem', maxWidth: '400px' }}>
+          {showCamera ? (
+            <CameraCapture onCapture={handleAICapture} capturing={scanning} label="Capture Tool Label" />
+          ) : (
+            <button type="button" onClick={() => setShowCamera(true)} style={btnStyle}>
+              🤖 Scan Tool
+            </button>
+          )}
+        </div>
+
+        {message && (
+          <p
+            style={{
+              color: message.type === 'error' ? '#ff8080' : message.type === 'info' ? colors.textMuted : '#5FCF7A',
+              marginBottom: '1rem',
+            }}
+          >
+            {message.text}
+          </p>
+        )}
+
+        <form onSubmit={handleAddTool} style={{ maxWidth: '400px' }}>
+          <label style={{ color: colors.white, fontSize: '14px' }}>Tool Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={inputStyle}
+          />
+
+          <label style={{ color: colors.white, fontSize: '14px' }}>Serial Number</label>
+          <input
+            type="text"
+            value={serial}
+            onChange={(e) => setSerial(e.target.value)}
+            required
+            style={inputStyle}
+          />
+
+          <button type="submit" disabled={saving} style={btnStyle}>
+            {saving ? 'Adding...' : 'Add Tool'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
