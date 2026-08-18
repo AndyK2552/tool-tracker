@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
+import CameraCapture from './CameraCapture';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
@@ -14,6 +15,9 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [scannedQr, setScannedQr] = useState('');
   const [assigningLocation, setAssigningLocation] = useState(false);
   const [newLocation, setNewLocation] = useState('');
+  const [updatingPhoto, setUpdatingPhoto] = useState(false);
+  const [newPhoto, setNewPhoto] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const scannerRef = useRef(null);
 
   const fetchTool = async () => {
@@ -151,6 +155,63 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage({ type: 'success', text: 'Location updated.' });
   };
 
+  const uploadToolImage = async (base64, pathSeed) => {
+    const byteString = atob(base64);
+    const bytes = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'image/jpeg' });
+
+    const safeSeed = pathSeed.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const path = `${safeSeed}-${Date.now()}.jpg`;
+    const { error: uploadError } = await supabase.storage.from('tool_images').upload(path, blob, {
+      contentType: 'image/jpeg',
+    });
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from('tool_images').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const handleStartUpdatePhoto = () => {
+    setNewPhoto(null);
+    setMessage(null);
+    setUpdatingPhoto(true);
+  };
+
+  const handleCancelUpdatePhoto = () => {
+    setUpdatingPhoto(false);
+    setNewPhoto(null);
+  };
+
+  const handleSubmitPhoto = async () => {
+    if (!newPhoto) return;
+    setUploadingPhoto(true);
+
+    try {
+      const imageUrl = await uploadToolImage(newPhoto, tool.qr_code || tool.id);
+      const { data, error } = await supabase
+        .from('tools')
+        .update({ image_url: imageUrl })
+        .eq('id', tool.id)
+        .select()
+        .single();
+
+      if (error) {
+        setMessage({ type: 'error', text: error.message });
+        setUploadingPhoto(false);
+        return;
+      }
+
+      setTool(data);
+      setUpdatingPhoto(false);
+      setNewPhoto(null);
+      setMessage({ type: 'success', text: 'Photo updated.' });
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to upload photo: ' + err.message });
+    }
+    setUploadingPhoto(false);
+  };
+
   const handleDelete = async () => {
     if (!window.confirm(`Are you sure you want to delete "${tool.name}"? This cannot be undone.`)) return;
     const { error } = await supabase.from('tools').delete().eq('id', tool.id);
@@ -280,9 +341,40 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               <button onClick={handleStartAssignLocation} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
                 Assign Location
               </button>
+              <button onClick={handleStartUpdatePhoto} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
+                Update Photo
+              </button>
               <button onClick={handleDelete} style={{ ...secondaryBtnStyle, color: '#ff8080', marginTop: 0 }}>
                 Delete Tool
               </button>
+            </div>
+          )}
+
+          {isAdmin && updatingPhoto && (
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+              {!newPhoto ? (
+                <>
+                  <CameraCapture onCapture={setNewPhoto} capturing={false} label="Capture Tool Photo" />
+                  <button onClick={handleCancelUpdatePhoto} style={{ ...secondaryBtnStyle, marginTop: '0.75rem' }}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <img
+                    src={`data:image/jpeg;base64,${newPhoto}`}
+                    alt="New tool"
+                    style={{ width: '100%', maxWidth: '250px', borderRadius: '8px', display: 'block', marginBottom: '0.75rem' }}
+                  />
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button onClick={handleSubmitPhoto} disabled={uploadingPhoto} style={btnStyle}>
+                      {uploadingPhoto ? 'Uploading...' : 'Submit'}
+                    </button>
+                    <button onClick={() => setNewPhoto(null)} style={secondaryBtnStyle}>Retake</button>
+                    <button onClick={handleCancelUpdatePhoto} style={secondaryBtnStyle}>Cancel</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
