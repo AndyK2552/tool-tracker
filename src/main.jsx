@@ -117,14 +117,16 @@ function Root() {
     return <AdminHome onNavigate={(v) => setView(v)} techName={profile.name} />
   }
 
+  const selectTool = (id) => {
+    setSelectedToolId(id)
+    setView('toolDetail')
+  }
+
   if (view === 'status') {
     return (
       <ToolStatus
         onHome={() => setView(profile.is_admin ? 'home' : 'scanner')}
-        onSelectTool={(id) => {
-          setSelectedToolId(id)
-          setView('toolDetail')
-        }}
+        onSelectTool={selectTool}
         isAdmin={profile.is_admin}
       />
     )
@@ -138,6 +140,7 @@ function Root() {
         techProfile={profile}
         onHome={() => setView('home')}
         onBackToStatus={() => setView('status')}
+        onSelectTool={selectTool}
       />
     )
   }

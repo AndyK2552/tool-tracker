@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
-function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
+function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSelectTool }) {
   const [tool, setTool] = useState(null);
   const [techs, setTechs] = useState([]);
   const [selectedTech, setSelectedTech] = useState('');
@@ -92,7 +92,21 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
 
     if (error) {
       if (error.code === '23505') {
-        setMessage({ type: 'error', text: 'That QR code is already assigned to another tool.' });
+        const { data: conflictingTool } = await supabase
+          .from('tools')
+          .select('id, name')
+          .eq('qr_code', scannedQr)
+          .single();
+
+        if (conflictingTool) {
+          setMessage({
+            type: 'error',
+            text: 'That QR code is already assigned to ',
+            link: { toolId: conflictingTool.id, label: conflictingTool.name },
+          });
+        } else {
+          setMessage({ type: 'error', text: 'That QR code is already assigned to another tool.' });
+        }
       } else {
         setMessage({ type: 'error', text: error.message });
       }
@@ -325,6 +339,17 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
         {message && (
           <p style={{ color: message.type === 'error' ? '#ff8080' : '#5FCF7A', marginTop: '1rem' }}>
             {message.text}
+            {message.link && (
+              <button
+                onClick={() => onSelectTool(message.link.toolId)}
+                style={{
+                  background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer',
+                  color: 'inherit', textDecoration: 'underline', fontWeight: 'bold', font: 'inherit',
+                }}
+              >
+                {message.link.label}
+              </button>
+            )}
           </p>
         )}
       </div>
