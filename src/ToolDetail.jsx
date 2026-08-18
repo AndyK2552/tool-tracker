@@ -27,7 +27,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     if (!assigningQr || !qrPanelRef.current) return;
     const el = qrPanelRef.current;
     const observer = new ResizeObserver(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      el.scrollIntoView({ behavior: 'smooth', block: 'end' });
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -41,7 +41,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     if (!updatingPhoto || !photoPanelRef.current) return;
     const el = photoPanelRef.current;
     const observer = new ResizeObserver(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      el.scrollIntoView({ behavior: 'smooth', block: 'end' });
     });
     observer.observe(el);
     return () => observer.disconnect();
