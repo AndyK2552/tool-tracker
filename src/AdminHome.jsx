@@ -28,7 +28,7 @@ function AdminHome({ onNavigate, techName }) {
       <PageHeader title="KYPD Tool Tracker" />
 
       <div style={{ padding: '1.25rem' }}>
-        <p style={{ fontSize: '12px', color: colors.textMuted, margin: '0 0 4px' }}>Admin home</p>
+        <p style={{ fontSize: '20px', fontWeight: 'bold', color: colors.gold, margin: '0 0 8px' }}>Admin Home</p>
         <p style={{ fontSize: '18px', fontWeight: 500, color: colors.white, margin: '0 0 1.25rem' }}>
           Good morning, {techName}
         </p>
