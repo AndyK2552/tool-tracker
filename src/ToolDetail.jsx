@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
@@ -9,6 +10,9 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
   const [selectedTech, setSelectedTech] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
+  const [assigningQr, setAssigningQr] = useState(false);
+  const [scannedQr, setScannedQr] = useState('');
+  const scannerRef = useRef(null);
 
   const fetchTool = async () => {
     const { data } = await supabase.from('tools').select('*').eq('id', toolId).single();
@@ -26,6 +30,70 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
     fetchTool();
     fetchTechs();
   }, [toolId]);
+
+  useEffect(() => {
+    if (!assigningQr) return;
+
+    const scanner = new Html5QrcodeScanner(
+      'qr-assign-reader',
+      { fps: 10, videoConstraints: { facingMode: { exact: 'environment' } } },
+      false
+    );
+    scannerRef.current = scanner;
+
+    scanner.render(
+      (decodedText) => {
+        scanner.pause();
+        setScannedQr(decodedText);
+      },
+      () => {}
+    );
+
+    return () => {
+      scanner.clear().catch(() => {});
+    };
+  }, [assigningQr]);
+
+  const handleStartAssignQr = () => {
+    setScannedQr('');
+    setMessage(null);
+    setAssigningQr(true);
+  };
+
+  const handleCancelAssignQr = () => {
+    setAssigningQr(false);
+    setScannedQr('');
+  };
+
+  const handleRescanQr = () => {
+    setScannedQr('');
+    if (scannerRef.current) scannerRef.current.resume();
+  };
+
+  const handleSubmitQr = async () => {
+    if (!scannedQr) return;
+
+    const { data, error } = await supabase
+      .from('tools')
+      .update({ qr_code: scannedQr })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        setMessage({ type: 'error', text: 'That QR code is already assigned to another tool.' });
+      } else {
+        setMessage({ type: 'error', text: error.message });
+      }
+      return;
+    }
+
+    setTool(data);
+    setAssigningQr(false);
+    setScannedQr('');
+    setMessage({ type: 'success', text: 'QR code assigned.' });
+  };
 
   const handleDelete = async () => {
     if (!window.confirm(`Are you sure you want to delete "${tool.name}"? This cannot be undone.`)) return;
@@ -108,6 +176,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
 
         <div style={{ background: colors.navyLight, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '8px', padding: '1rem', maxWidth: '400px' }}>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Serial Number:</strong> {tool.id}</p>
+          <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>QR Code:</strong> {tool.qr_code || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Checked out:</strong> {tool.is_checked_out ? 'Yes' : 'No'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Checked out by:</strong> {tool.checked_out_by || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Condition:</strong> {tool.condition}</p>
@@ -139,10 +208,49 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
           )}
 
           {isAdmin && (
-            <div style={{ marginTop: '1rem' }}>
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button onClick={handleStartAssignQr} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
+                Assign QR Code
+              </button>
               <button onClick={handleDelete} style={{ ...secondaryBtnStyle, color: '#ff8080', marginTop: 0 }}>
                 Delete Tool
               </button>
+            </div>
+          )}
+
+          {isAdmin && assigningQr && (
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+              {!scannedQr ? (
+                <>
+                  <div id="qr-assign-reader" style={{ width: '100%' }}></div>
+                  <p style={{ fontSize: '0.85rem', color: colors.textMuted, marginTop: '0.75rem' }}>
+                    Point the camera at the QR code — it'll scan automatically.
+                  </p>
+                  <button onClick={handleCancelAssignQr} style={{ ...secondaryBtnStyle, marginTop: '0.5rem' }}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
+                    QR Code
+                  </label>
+                  <input
+                    type="text"
+                    value={scannedQr}
+                    readOnly
+                    style={{
+                      width: '100%', padding: '0.6rem', borderRadius: '6px', border: `0.5px solid ${colors.navyBorder}`,
+                      background: colors.navyLight, color: colors.white, marginBottom: '0.75rem', boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button onClick={handleSubmitQr} style={btnStyle}>Submit</button>
+                    <button onClick={handleRescanQr} style={secondaryBtnStyle}>Rescan</button>
+                    <button onClick={handleCancelAssignQr} style={secondaryBtnStyle}>Cancel</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
