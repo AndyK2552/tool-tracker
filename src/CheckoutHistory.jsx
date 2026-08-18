@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { formatEastern } from './dateUtils';
-import { colors } from './theme';
+import { colors, btnStyle } from './theme';
 import PageHeader from './PageHeader';
 
 const COLUMNS = [
@@ -101,14 +101,6 @@ function CheckoutHistory({ onHome }) {
     return result;
   }, [rows, activeFilters, sortConfig]);
 
-  const secondaryBtnStyle = {
-    padding: '0.5rem 1rem',
-    borderRadius: '6px',
-    border: `0.5px solid ${colors.navyBorder}`,
-    background: colors.navyLight,
-    color: colors.white,
-    cursor: 'pointer',
-  };
 
   if (loading) return <p style={{ color: colors.white, padding: '1rem' }}>Loading history...</p>;
 

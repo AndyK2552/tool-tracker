@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import CameraCapture from './CameraCapture';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
+import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
 function AdminPage({ onHome }) {
   const [name, setName] = useState('');
@@ -66,22 +67,6 @@ function AdminPage({ onHome }) {
     border: 'none',
   };
 
-  const btnStyle = {
-    padding: '0.6rem 1rem',
-    borderRadius: '6px',
-    border: 'none',
-    background: colors.gold,
-    color: colors.navy,
-    fontWeight: 'bold',
-    cursor: 'pointer',
-  };
-
-  const secondaryBtnStyle = {
-    ...btnStyle,
-    background: colors.navyLight,
-    color: colors.white,
-    border: `0.5px solid ${colors.navyBorder}`,
-  };
 
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
+import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
 function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
   const [tool, setTool] = useState(null);
@@ -89,23 +90,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
     setMessage({ type: 'success', text: `Checked out to ${techName}.` });
   };
 
-  const btnStyle = {
-    padding: '0.6rem 1rem',
-    borderRadius: '6px',
-    border: 'none',
-    background: colors.gold,
-    color: colors.navy,
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    marginTop: '0.5rem',
-  };
-
-  const secondaryBtnStyle = {
-    ...btnStyle,
-    background: colors.navyLight,
-    color: colors.white,
-    border: `0.5px solid ${colors.navyBorder}`,
-  };
 
   if (loading) return <p style={{ color: colors.white, padding: '1rem' }}>Loading...</p>;
   if (!tool) return <p style={{ color: colors.white, padding: '1rem' }}>Tool not found.</p>;
