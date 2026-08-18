@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { supabase } from './supabaseClient';
 import CameraCapture from './CameraCapture';
-import { colors } from './theme';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
