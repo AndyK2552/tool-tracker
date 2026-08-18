@@ -26,12 +26,12 @@ function AdminPage({ onHome, onSelectTool }) {
     const blob = new Blob([bytes], { type: 'image/jpeg' });
 
     const path = `${encodeURIComponent(serialForPath)}-${Date.now()}.jpg`;
-    const { error: uploadError } = await supabase.storage.from('tool-images').upload(path, blob, {
+    const { error: uploadError } = await supabase.storage.from('tool_images').upload(path, blob, {
       contentType: 'image/jpeg',
     });
     if (uploadError) throw uploadError;
 
-    const { data } = supabase.storage.from('tool-images').getPublicUrl(path);
+    const { data } = supabase.storage.from('tool_images').getPublicUrl(path);
     return data.publicUrl;
   };
 
