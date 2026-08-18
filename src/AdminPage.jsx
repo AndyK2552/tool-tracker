@@ -7,6 +7,7 @@ import { colors, btnStyle, secondaryBtnStyle } from './theme';
 function AdminPage({ onHome }) {
   const [name, setName] = useState('');
   const [serial, setSerial] = useState('');
+  const [location, setLocation] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [scanning, setScanning] = useState(false);
@@ -19,7 +20,7 @@ function AdminPage({ onHome }) {
 
     const { error } = await supabase
       .from('tools')
-      .insert({ id: serial.trim(), name: name.trim(), is_checked_out: false, condition: 'Ready' });
+      .insert({ id: serial.trim(), name: name.trim(), location, is_checked_out: false, condition: 'Ready' });
 
     if (error) {
       if (error.code === '23505') {
@@ -31,6 +32,7 @@ function AdminPage({ onHome }) {
       setMessage({ type: 'success', text: `Added "${name}" successfully.` });
       setName('');
       setSerial('');
+      setLocation('');
     }
     setSaving(false);
   };
@@ -117,6 +119,18 @@ function AdminPage({ onHome }) {
             required
             style={inputStyle}
           />
+
+          <label style={{ color: colors.white, fontSize: '14px' }}>Location</label>
+          <select
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            required
+            style={inputStyle}
+          >
+            <option value="">Select a location...</option>
+            <option value="Shop">Shop</option>
+            <option value="Truck">Truck</option>
+          </select>
 
           <button type="submit" disabled={saving} style={btnStyle}>
             {saving ? 'Adding...' : 'Add Tool'}

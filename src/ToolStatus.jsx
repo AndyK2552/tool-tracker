@@ -25,6 +25,7 @@ const formatDuration = (checkedOutAt) => {
 function ToolStatus({ onHome, onSelectTool, isAdmin }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [locationFilter, setLocationFilter] = useState('All');
 
   const fetchTools = async () => {
     const { data, error } = await supabase
@@ -44,8 +45,9 @@ function ToolStatus({ onHome, onSelectTool, isAdmin }) {
     return () => clearInterval(interval);
   }, []);
 
-  const available = tools.filter((t) => !t.is_checked_out);
-  const checkedOut = tools
+  const locationFilteredTools = tools.filter((t) => locationFilter === 'All' || t.location === locationFilter);
+  const available = locationFilteredTools.filter((t) => !t.is_checked_out);
+  const checkedOut = locationFilteredTools
     .filter((t) => t.is_checked_out)
     .sort((a, b) => new Date(a.checked_out_at) - new Date(b.checked_out_at));
 
@@ -77,6 +79,23 @@ function ToolStatus({ onHome, onSelectTool, isAdmin }) {
         </button>
 
         <h1 style={{ color: colors.white, fontSize: '20px' }}>Tool Status</h1>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+          {['All', 'Truck', 'Shop'].map((option) => (
+            <button
+              key={option}
+              onClick={() => setLocationFilter(option)}
+              style={{
+                padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold',
+                border: `0.5px solid ${colors.navyBorder}`,
+                background: locationFilter === option ? colors.gold : colors.navyLight,
+                color: locationFilter === option ? colors.navy : colors.white,
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
 
         <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '250px' }}>

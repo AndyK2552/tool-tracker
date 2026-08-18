@@ -12,6 +12,8 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
   const [message, setMessage] = useState(null);
   const [assigningQr, setAssigningQr] = useState(false);
   const [scannedQr, setScannedQr] = useState('');
+  const [assigningLocation, setAssigningLocation] = useState(false);
+  const [newLocation, setNewLocation] = useState('');
   const scannerRef = useRef(null);
 
   const fetchTool = async () => {
@@ -93,6 +95,38 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
     setAssigningQr(false);
     setScannedQr('');
     setMessage({ type: 'success', text: 'QR code assigned.' });
+  };
+
+  const handleStartAssignLocation = () => {
+    setNewLocation(tool.location || '');
+    setMessage(null);
+    setAssigningLocation(true);
+  };
+
+  const handleCancelAssignLocation = () => {
+    setAssigningLocation(false);
+    setNewLocation('');
+  };
+
+  const handleSubmitLocation = async () => {
+    if (!newLocation) return;
+
+    const { data, error } = await supabase
+      .from('tools')
+      .update({ location: newLocation })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+
+    setTool(data);
+    setAssigningLocation(false);
+    setNewLocation('');
+    setMessage({ type: 'success', text: 'Location updated.' });
   };
 
   const handleDelete = async () => {
@@ -177,6 +211,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
         <div style={{ background: colors.navyLight, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '8px', padding: '1rem', maxWidth: '400px' }}>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Serial Number:</strong> {tool.id}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>QR Code:</strong> {tool.qr_code || '—'}</p>
+          <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Location:</strong> {tool.location || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Checked out:</strong> {tool.is_checked_out ? 'Yes' : 'No'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Checked out by:</strong> {tool.checked_out_by || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Condition:</strong> {tool.condition}</p>
@@ -212,9 +247,33 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
               <button onClick={handleStartAssignQr} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
                 Assign QR Code
               </button>
+              <button onClick={handleStartAssignLocation} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
+                Assign Location
+              </button>
               <button onClick={handleDelete} style={{ ...secondaryBtnStyle, color: '#ff8080', marginTop: 0 }}>
                 Delete Tool
               </button>
+            </div>
+          )}
+
+          {isAdmin && assigningLocation && (
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+              <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
+                Location
+              </label>
+              <select
+                value={newLocation}
+                onChange={(e) => setNewLocation(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.75rem', boxSizing: 'border-box' }}
+              >
+                <option value="">Select a location...</option>
+                <option value="Shop">Shop</option>
+                <option value="Truck">Truck</option>
+              </select>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button onClick={handleSubmitLocation} style={btnStyle}>Submit</button>
+                <button onClick={handleCancelAssignLocation} style={secondaryBtnStyle}>Cancel</button>
+              </div>
             </div>
           )}
 
