@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
-import { colors } from './theme';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
