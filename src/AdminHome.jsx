@@ -1,4 +1,4 @@
-import { Camera, ClipboardList, Plus, Clock } from 'lucide-react';
+import { Camera, ClipboardList, Plus, Clock, Users } from 'lucide-react';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
 
@@ -36,6 +36,7 @@ function AdminHome({ onNavigate, techName }) {
     { key: 'status', icon: ClipboardList, label: 'Manage tools' },
     { key: 'admin', icon: Plus, label: 'Add new tool' },
     { key: 'history', icon: Clock, label: 'Checkout history' },
+    { key: 'users', icon: Users, label: 'Manage users' },
   ];
 
   return (

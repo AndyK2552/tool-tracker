@@ -10,6 +10,7 @@ import { StrictMode, useState, useEffect, useRef } from 'react'
 import AdminHome from './AdminHome.jsx'
 import CheckoutHistory from './CheckoutHistory.jsx'
 import ToolDetail from './ToolDetail.jsx'
+import ManageUsers from './ManageUsers.jsx'
 import { colors } from './theme'
 
 function Root() {
@@ -153,9 +154,13 @@ function Root() {
     return <AdminPage onHome={() => setView('home')} />
   }
 
+  if (view === 'users') {
+    return <ManageUsers onHome={() => setView('home')} />
+  }
+
   return (
     <div>
-      <div style={{ padding: '1rem', background: colors.navy, textAlign: 'right' }}>
+      <div style={{ padding: '1rem', background: colors.navy, textAlign: 'center' }}>
         {profile.is_admin ? (
           <button
             onClick={() => setView('home')}
