@@ -6,12 +6,66 @@ import Registration from './Registration.jsx'
 import ToolStatus from './ToolStatus.jsx'
 import AdminPage from './AdminPage.jsx'
 import { supabase } from './supabaseClient.js'
-import { StrictMode, useState, useEffect, useRef } from 'react'
+import { StrictMode, Component, useState, useEffect, useRef } from 'react'
 import AdminHome from './AdminHome.jsx'
 import CheckoutHistory from './CheckoutHistory.jsx'
 import ToolDetail from './ToolDetail.jsx'
 import ManageUsers from './ManageUsers.jsx'
 import { colors } from './theme'
+import { installGlobalCrashLogging, getLastCrash, clearLastCrash, logCrash } from './crashLog.js'
+
+installGlobalCrashLogging()
+
+class ErrorBoundary extends Component {
+  state = { error: null }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error) {
+    logCrash('react-error-boundary', error)
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ background: colors.navy, minHeight: '100vh', padding: '1.25rem', color: colors.white }}>
+          <h2>Something went wrong</h2>
+          <p style={{ color: '#ff8080' }}>{this.state.error.message}</p>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.7rem', color: colors.textMuted }}>{this.state.error.stack}</pre>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ marginTop: '1rem', padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: colors.gold, color: colors.navy, fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            Reload
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function CrashBanner() {
+  const [crash, setCrash] = useState(() => getLastCrash())
+
+  if (!crash) return null
+
+  return (
+    <div style={{ background: '#3a1414', color: '#ff8080', padding: '0.85rem 1.25rem', fontSize: '0.8rem' }}>
+      <strong>Last crash ({crash.source}, {new Date(crash.time).toLocaleString()}):</strong>
+      <p style={{ margin: '0.35rem 0', whiteSpace: 'pre-wrap' }}>{crash.message}</p>
+      {crash.stack && <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.65rem', opacity: 0.8 }}>{crash.stack}</pre>}
+      <button
+        onClick={() => { clearLastCrash(); setCrash(null) }}
+        style={{ marginTop: '0.5rem', padding: '0.3rem 0.75rem', borderRadius: '6px', border: 'none', background: colors.navyLight, color: colors.white, cursor: 'pointer' }}
+      >
+        Dismiss
+      </button>
+    </div>
+  )
+}
 
 function Root() {
   const [session, setSession] = useState(null)
@@ -184,6 +238,9 @@ function Root() {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <Root />
+    <ErrorBoundary>
+      <CrashBanner />
+      <Root />
+    </ErrorBoundary>
   </StrictMode>,
 )

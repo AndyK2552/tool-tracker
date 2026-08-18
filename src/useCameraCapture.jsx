@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { resizeImage } from './imageUtils';
+import { logCrash } from './crashLog';
 
 // Wires a hidden native-camera file input to a resize+callback pipeline.
 // The returned `open()` must be called synchronously from a click handler —
@@ -21,8 +22,9 @@ export function useCameraCapture(onCapture) {
     try {
       const base64 = await resizeImage(file, 1024);
       onCapture(base64);
-    } catch {
-      setError('Could not read that photo. Please try again.');
+    } catch (err) {
+      logCrash('resizeImage', err);
+      setError('Could not process that photo: ' + (err?.message || String(err)));
     }
   };
 
