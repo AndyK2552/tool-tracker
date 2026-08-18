@@ -2,6 +2,21 @@ import { Camera, ClipboardList, Plus, Clock } from 'lucide-react';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
 
+const getGreeting = () => {
+  const hour = parseInt(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      hour12: false,
+    }).format(new Date()),
+    10
+  );
+
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+};
+
 function AdminHome({ onNavigate, techName }) {
   const cardStyle = {
     background: colors.navyLight,
@@ -28,10 +43,12 @@ function AdminHome({ onNavigate, techName }) {
       <PageHeader title="KYPD Tool Tracker" />
 
       <div style={{ padding: '1.25rem' }}>
-        <p style={{ fontSize: '20px', fontWeight: 'bold', color: colors.gold, margin: '0 0 8px' }}>Admin Home</p>
-        <p style={{ fontSize: '18px', fontWeight: 500, color: colors.white, margin: '0 0 1.25rem' }}>
-          Good morning, {techName}
+        <p style={{ fontSize: '18px', fontWeight: 500, color: colors.white, margin: '0 0 4px' }}>
+        {getGreeting()}, {techName}
         </p>
+        <p style={{ fontSize: '20px', fontWeight: 'bold', color: colors.gold, margin: '0 0 1.25rem' }}>
+          Admin Home
+      </p>
 
         <div
           style={{
