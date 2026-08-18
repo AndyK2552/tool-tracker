@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
+import { safeStopScanner, safePauseScanner } from './qrScannerUtils';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
 
@@ -29,7 +30,7 @@ function QrTest({ techProfile }) {
         { facingMode: 'environment' },
         { fps: 10 },
         async (decodedText) => {
-          scanner.pause(true);
+          safePauseScanner(scanner, true);
           await scanForTool(decodedText);
         },
         () => {}
@@ -39,7 +40,7 @@ function QrTest({ techProfile }) {
       });
 
     return () => {
-      scanner.stop().then(() => scanner.clear()).catch(() => {});
+      safeStopScanner(scanner);
     };
   }, []);
 

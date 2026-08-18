@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import { useCameraCapture } from './useCameraCapture';
+import { safeStopScanner, safePauseScanner } from './qrScannerUtils';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
@@ -68,7 +69,7 @@ function AdminPage({ onHome, onSelectTool }) {
         { facingMode: 'environment' },
         { fps: 10 },
         (decodedText) => {
-          scanner.pause(true);
+          safePauseScanner(scanner, true);
           setQrCode(decodedText);
           setAssigningQr(false);
         },
@@ -79,7 +80,7 @@ function AdminPage({ onHome, onSelectTool }) {
       });
 
     return () => {
-      scanner.stop().then(() => scanner.clear()).catch(() => {});
+      safeStopScanner(scanner);
     };
   }, [assigningQr]);
 
