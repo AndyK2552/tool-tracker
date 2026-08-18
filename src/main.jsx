@@ -10,6 +10,7 @@ import { StrictMode, useState, useEffect, useRef } from 'react'
 import AdminHome from './AdminHome.jsx'
 import CheckoutHistory from './CheckoutHistory.jsx'
 import ToolDetail from './ToolDetail.jsx'
+import { colors } from './theme'
 
 function Root() {
   const [session, setSession] = useState(null)
@@ -105,16 +106,16 @@ function Root() {
   }
 
   if (view === 'toolDetail') {
-  return (
-    <ToolDetail
-      toolId={selectedToolId}
-      isAdmin={profile.is_admin}
-      techProfile={profile}
-      onHome={() => setView('home')}
-      onBackToStatus={() => setView('status')}
-    />
-  )
-}
+    return (
+      <ToolDetail
+        toolId={selectedToolId}
+        isAdmin={profile.is_admin}
+        techProfile={profile}
+        onHome={() => setView('home')}
+        onBackToStatus={() => setView('status')}
+      />
+    )
+  }
 
   if (view === 'history') {
     return <CheckoutHistory onHome={() => setView('home')} />
@@ -126,11 +127,21 @@ function Root() {
 
   return (
     <div>
-      <div style={{ padding: '1rem', textAlign: 'right' }}>
+      <div style={{ padding: '1rem', background: colors.navy, textAlign: 'right' }}>
         {profile.is_admin ? (
-          <button onClick={() => setView('home')}>Home</button>
+          <button
+            onClick={() => setView('home')}
+            style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: colors.gold, color: colors.navy, fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            Home
+          </button>
         ) : (
-          <button onClick={() => setView('status')}>View Tools</button>
+          <button
+            onClick={() => setView('status')}
+            style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: colors.gold, color: colors.navy, fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            View Tools
+          </button>
         )}
       </div>
       <QrTest techProfile={profile} />

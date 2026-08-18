@@ -117,7 +117,7 @@ function CheckoutHistory({ onHome }) {
       <PageHeader title="KYPD Tool Tracker" />
 
       <div style={{ padding: '1.25rem' }}>
-        <button onClick={onHome} style={{ ...secondaryBtnStyle, marginBottom: '1rem' }}>Home</button>
+        <button onClick={onHome} style={{ ...btnStyle, marginBottom: '1rem' }}>Home</button>
         <h1 style={{ color: colors.white, fontSize: '20px' }}>Checkout History</h1>
 
         <div style={{ overflowX: 'auto' }}>

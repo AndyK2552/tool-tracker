@@ -117,7 +117,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
       <PageHeader title="KYPD Tool Tracker" />
 
       <div style={{ padding: '1.25rem' }}>
-        <button onClick={isAdmin ? onHome : onBackToStatus} style={{ ...secondaryBtnStyle, marginBottom: '1rem' }}>
+        <button onClick={isAdmin ? onHome : onBackToStatus} style={{ ...btnStyle, marginBottom: '1rem' }}>
           {isAdmin ? 'Home' : 'Back to Tool Status'}
         </button>
 

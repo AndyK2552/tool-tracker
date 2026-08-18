@@ -90,7 +90,7 @@ function AdminPage({ onHome }) {
       <div style={{ padding: '1.25rem' }}>
         <h1 style={{ color: colors.white, fontSize: '20px' }}>Admin: Add Tool</h1>
 
-        <button onClick={onHome} style={{ ...secondaryBtnStyle, marginBottom: '1rem' }}>
+        <button onClick={onHome} style={{ ...btnStyle, marginBottom: '1rem' }}>
           Home
         </button>
 
