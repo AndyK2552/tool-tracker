@@ -19,14 +19,14 @@ function AdminPage({ onHome, onSelectTool }) {
   const [qrCode, setQrCode] = useState('');
   const scannerRef = useRef(null);
 
-  const uploadToolImage = async (base64, serialForPath) => {
+  const uploadToolImage = async (base64, qrCodeForPath) => {
     const byteString = atob(base64);
     const bytes = new Uint8Array(byteString.length);
     for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
     const blob = new Blob([bytes], { type: 'image/jpeg' });
 
-    const safeSerial = serialForPath.replace(/[^a-zA-Z0-9._-]/g, '-');
-    const path = `${safeSerial}-${Date.now()}.jpg`;
+    const safeQrCode = qrCodeForPath.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const path = `${safeQrCode}-${Date.now()}.jpg`;
     const { error: uploadError } = await supabase.storage.from('tool_images').upload(path, blob, {
       contentType: 'image/jpeg',
     });
@@ -79,7 +79,7 @@ function AdminPage({ onHome, onSelectTool }) {
 
     let imageUrl;
     try {
-      imageUrl = await uploadToolImage(toolPhoto, serial.trim());
+      imageUrl = await uploadToolImage(toolPhoto, qrCode);
     } catch (err) {
       setMessage({ type: 'error', text: 'Failed to upload photo: ' + err.message });
       setSaving(false);
