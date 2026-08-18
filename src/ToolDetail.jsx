@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
@@ -36,23 +36,25 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
   useEffect(() => {
     if (!assigningQr) return;
 
-    const scanner = new Html5QrcodeScanner(
-      'qr-assign-reader',
-      { fps: 10, videoConstraints: { facingMode: { exact: 'environment' } } },
-      false
-    );
+    const scanner = new Html5Qrcode('qr-assign-reader');
     scannerRef.current = scanner;
 
-    scanner.render(
-      (decodedText) => {
-        scanner.pause();
-        setScannedQr(decodedText);
-      },
-      () => {}
-    );
+    scanner
+      .start(
+        { facingMode: 'environment' },
+        { fps: 10 },
+        (decodedText) => {
+          scanner.pause(true);
+          setScannedQr(decodedText);
+        },
+        () => {}
+      )
+      .catch((err) => {
+        setMessage({ type: 'error', text: 'Could not start camera: ' + err });
+      });
 
     return () => {
-      scanner.clear().catch(() => {});
+      scanner.stop().then(() => scanner.clear()).catch(() => {});
     };
   }, [assigningQr]);
 
@@ -69,7 +71,13 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus }) {
 
   const handleRescanQr = () => {
     setScannedQr('');
-    if (scannerRef.current) scannerRef.current.resume();
+    if (scannerRef.current) {
+      try {
+        scannerRef.current.resume();
+      } catch {
+        // scanner wasn't running (e.g. camera never started) — nothing to resume
+      }
+    }
   };
 
   const handleSubmitQr = async () => {

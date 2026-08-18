@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
@@ -21,23 +21,25 @@ function QrTest({ techProfile }) {
   };
 
   useEffect(() => {
-    const scanner = new Html5QrcodeScanner(
-      'qr-reader',
-      { fps: 10, videoConstraints: { facingMode: { exact: 'environment' } } },
-      false
-    );
+    const scanner = new Html5Qrcode('qr-reader');
     scannerRef.current = scanner;
 
-    scanner.render(
-      async (decodedText) => {
-        scanner.pause();
-        await scanForTool(decodedText);
-      },
-      () => {}
-    );
+    scanner
+      .start(
+        { facingMode: 'environment' },
+        { fps: 10 },
+        async (decodedText) => {
+          scanner.pause(true);
+          await scanForTool(decodedText);
+        },
+        () => {}
+      )
+      .catch((err) => {
+        setError('Could not start camera: ' + err);
+      });
 
     return () => {
-      scanner.clear().catch(() => {});
+      scanner.stop().then(() => scanner.clear()).catch(() => {});
     };
   }, []);
 
@@ -100,7 +102,13 @@ function QrTest({ techProfile }) {
   const resetScan = () => {
     setTool(null);
     setError(null);
-    if (scannerRef.current) scannerRef.current.resume();
+    if (scannerRef.current) {
+      try {
+        scannerRef.current.resume();
+      } catch {
+        // scanner wasn't running (e.g. camera never started) — nothing to resume
+      }
+    }
   };
 
   const cardStyle = { background: colors.navyLight, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '8px', padding: '1rem', marginTop: '1rem' };
