@@ -12,15 +12,43 @@ function AdminPage({ onHome }) {
   const [message, setMessage] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [showCamera, setShowCamera] = useState(true);
+  const [capturedImage, setCapturedImage] = useState(null);
+
+  const uploadToolImage = async (base64, serialForPath) => {
+    const byteString = atob(base64);
+    const bytes = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'image/jpeg' });
+
+    const path = `${encodeURIComponent(serialForPath)}-${Date.now()}.jpg`;
+    const { error: uploadError } = await supabase.storage.from('tool-images').upload(path, blob, {
+      contentType: 'image/jpeg',
+    });
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from('tool-images').getPublicUrl(path);
+    return data.publicUrl;
+  };
 
   const handleAddTool = async (e) => {
     e.preventDefault();
     setSaving(true);
     setMessage(null);
 
+    let imageUrl = null;
+    if (capturedImage) {
+      try {
+        imageUrl = await uploadToolImage(capturedImage, serial.trim());
+      } catch (err) {
+        setMessage({ type: 'error', text: 'Failed to upload photo: ' + err.message });
+        setSaving(false);
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from('tools')
-      .insert({ id: serial.trim(), name: name.trim(), location, is_checked_out: false, condition: 'Ready' });
+      .insert({ id: serial.trim(), name: name.trim(), location, image_url: imageUrl, is_checked_out: false, condition: 'Ready' });
 
     if (error) {
       if (error.code === '23505') {
@@ -33,6 +61,8 @@ function AdminPage({ onHome }) {
       setName('');
       setSerial('');
       setLocation('');
+      setCapturedImage(null);
+      setShowCamera(true);
     }
     setSaving(false);
   };
@@ -40,6 +70,7 @@ function AdminPage({ onHome }) {
   const handleAICapture = async (base64) => {
     setScanning(true);
     setMessage(null);
+    setCapturedImage(base64);
     try {
       const response = await fetch('/api/analyze-tool', {
         method: 'POST',
@@ -84,9 +115,25 @@ function AdminPage({ onHome }) {
           {showCamera ? (
             <CameraCapture onCapture={handleAICapture} capturing={scanning} label="Capture Tool Label" />
           ) : (
-            <button type="button" onClick={() => setShowCamera(true)} style={btnStyle}>
-              🤖 Scan Tool
-            </button>
+            <div>
+              {capturedImage && (
+                <img
+                  src={`data:image/jpeg;base64,${capturedImage}`}
+                  alt="Captured tool"
+                  style={{ width: '100%', maxWidth: '250px', borderRadius: '8px', display: 'block', marginBottom: '0.75rem' }}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCamera(true);
+                  setCapturedImage(null);
+                }}
+                style={btnStyle}
+              >
+                🤖 {capturedImage ? 'Retake Photo' : 'Scan Tool'}
+              </button>
+            </div>
           )}
         </div>
 

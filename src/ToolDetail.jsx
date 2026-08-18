@@ -230,6 +230,14 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
 
         <h1 style={{ color: colors.white, fontSize: '20px' }}>{tool.name}</h1>
 
+        {tool.image_url && (
+          <img
+            src={tool.image_url}
+            alt={tool.name}
+            style={{ width: '100%', maxWidth: '400px', borderRadius: '8px', display: 'block', marginBottom: '1rem' }}
+          />
+        )}
+
         <div style={{ background: colors.navyLight, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '8px', padding: '1rem', maxWidth: '400px' }}>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Serial Number:</strong> {tool.id}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>QR Code:</strong> {tool.qr_code || '—'}</p>
