@@ -102,8 +102,11 @@ function CheckoutHistory({ onHome }) {
   }, [rows, activeFilters, sortConfig]);
 
 
-  if (loading) return <p style={{ color: colors.white, padding: '1rem' }}>Loading history...</p>;
-
+  if (loading) return (
+  <div style={{ background: colors.navy, minHeight: '100vh', padding: '1rem' }}>
+    <p style={{ color: colors.white }}>Loading history...</p>
+  </div>
+);
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
       <PageHeader title="KYPD Tool Tracker" />

@@ -58,7 +58,11 @@ function ToolStatus({ onHome, onSelectTool, isAdmin }) {
     cursor: 'pointer',
   };
 
-  if (loading) return <p style={{ color: colors.white, padding: '1rem' }}>Loading tool status...</p>;
+  if (loading) return (
+  <div style={{ background: colors.navy, minHeight: '100vh', padding: '1rem' }}>
+    <p style={{ color: colors.white }}>Loading tool status...</p>
+  </div>
+);
 
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
