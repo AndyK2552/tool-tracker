@@ -115,9 +115,12 @@ function Root() {
     }
   }
 
+  const hadSessionRef = useRef(false)
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
+      hadSessionRef.current = !!session
       if (session) {
         await loadProfile(session.user.id)
       }
@@ -127,12 +130,20 @@ function Root() {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session)
 
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+      // Supabase re-fires SIGNED_IN when revalidating an existing session on
+      // tab refocus (e.g. returning from the native camera app) — not just on
+      // a genuine new login. Only reset navigation on a real sign-in, i.e. a
+      // transition from no session to having one; otherwise this was wiping
+      // the current view (and in-progress work) back to Home on every refocus.
+      const isGenuineSignIn = event === 'SIGNED_IN' && !hadSessionRef.current
+      if (isGenuineSignIn || event === 'SIGNED_OUT') {
         setView('scanner')
         hasSetInitialView.current = false
         localStorage.removeItem('view')
         localStorage.removeItem('selectedToolId')
       }
+
+      hadSessionRef.current = !!session
 
       if (session) {
         await loadProfile(session.user.id)
