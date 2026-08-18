@@ -25,7 +25,8 @@ function AdminPage({ onHome, onSelectTool }) {
     for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
     const blob = new Blob([bytes], { type: 'image/jpeg' });
 
-    const path = `${encodeURIComponent(serialForPath)}-${Date.now()}.jpg`;
+    const safeSerial = serialForPath.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const path = `${safeSerial}-${Date.now()}.jpg`;
     const { error: uploadError } = await supabase.storage.from('tool_images').upload(path, blob, {
       contentType: 'image/jpeg',
     });
