@@ -8,12 +8,11 @@ import { colors, btnStyle, secondaryBtnStyle } from './theme';
 function AdminPage({ onHome, onSelectTool }) {
   const [name, setName] = useState('');
   const [serial, setSerial] = useState('');
-  const [location, setLocation] = useState('');
+  const [location, setLocation] = useState('Shop');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [showCamera, setShowCamera] = useState(true);
-  const [capturedImage, setCapturedImage] = useState(null);
   const [showToolCamera, setShowToolCamera] = useState(false);
   const [toolPhoto, setToolPhoto] = useState(null);
   const [assigningQr, setAssigningQr] = useState(false);
@@ -64,18 +63,26 @@ function AdminPage({ onHome, onSelectTool }) {
 
   const handleAddTool = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setMessage(null);
 
-    let imageUrl = null;
-    if (toolPhoto) {
-      try {
-        imageUrl = await uploadToolImage(toolPhoto, serial.trim());
-      } catch (err) {
-        setMessage({ type: 'error', text: 'Failed to upload photo: ' + err.message });
-        setSaving(false);
-        return;
-      }
+    if (!toolPhoto) {
+      setMessage({ type: 'error', text: 'Please take a picture of the tool before saving.' });
+      return;
+    }
+    if (!qrCode) {
+      setMessage({ type: 'error', text: 'Please assign a QR code before saving.' });
+      return;
+    }
+
+    setSaving(true);
+
+    let imageUrl;
+    try {
+      imageUrl = await uploadToolImage(toolPhoto, serial.trim());
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to upload photo: ' + err.message });
+      setSaving(false);
+      return;
     }
 
     const { error } = await supabase
@@ -85,7 +92,7 @@ function AdminPage({ onHome, onSelectTool }) {
         name: name.trim(),
         location,
         image_url: imageUrl,
-        qr_code: qrCode || null,
+        qr_code: qrCode,
         is_checked_out: false,
         condition: 'Ready',
       });
@@ -121,8 +128,7 @@ function AdminPage({ onHome, onSelectTool }) {
     setMessage({ type: 'success', text: `Added "${name}" successfully.` });
     setName('');
     setSerial('');
-    setLocation('');
-    setCapturedImage(null);
+    setLocation('Shop');
     setShowCamera(true);
     setToolPhoto(null);
     setQrCode('');
@@ -132,7 +138,7 @@ function AdminPage({ onHome, onSelectTool }) {
   const handleAICapture = async (base64) => {
     setScanning(true);
     setMessage(null);
-    setCapturedImage(base64);
+    setShowCamera(false);
     try {
       const response = await fetch('/api/analyze-tool', {
         method: 'POST',
@@ -144,7 +150,6 @@ function AdminPage({ onHome, onSelectTool }) {
       setName(result.name || '');
       setSerial(result.serial || '');
       setMessage({ type: 'info', text: 'Detected — please review and correct below before saving.' });
-      setShowCamera(false);
     } catch (err) {
       setMessage({ type: 'error', text: 'AI scan failed: ' + err.message });
     }
@@ -188,26 +193,12 @@ function AdminPage({ onHome, onSelectTool }) {
         <div style={{ marginBottom: '1rem', maxWidth: '400px' }}>
           {showCamera ? (
             <CameraCapture onCapture={handleAICapture} capturing={scanning} label="Capture Tool Label" />
+          ) : scanning ? (
+            <p style={{ color: colors.textMuted }}>Analyzing photo...</p>
           ) : (
-            <div>
-              {capturedImage && (
-                <img
-                  src={`data:image/jpeg;base64,${capturedImage}`}
-                  alt="Captured nameplate"
-                  style={{ width: '100%', maxWidth: '250px', borderRadius: '8px', display: 'block', marginBottom: '0.75rem' }}
-                />
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCamera(true);
-                  setCapturedImage(null);
-                }}
-                style={btnStyle}
-              >
-                🤖 {capturedImage ? 'Retake Photo' : 'Scan Tool'}
-              </button>
-            </div>
+            <button type="button" onClick={() => setShowCamera(true)} style={btnStyle}>
+              🤖 Scan Tool
+            </button>
           )}
         </div>
 
@@ -265,7 +256,7 @@ function AdminPage({ onHome, onSelectTool }) {
             <option value="Truck">Truck</option>
           </select>
 
-          <label style={fieldLabelStyle}>Tool Photo (optional)</label>
+          <label style={fieldLabelStyle}>Tool Photo</label>
           <div style={{ marginBottom: '1rem' }}>
             {showToolCamera ? (
               <CameraCapture onCapture={handleToolPhotoCapture} capturing={false} label="Capture Tool Photo" />
@@ -294,7 +285,7 @@ function AdminPage({ onHome, onSelectTool }) {
             )}
           </div>
 
-          <label style={fieldLabelStyle}>QR Code (optional)</label>
+          <label style={fieldLabelStyle}>QR Code</label>
           <div style={{ marginBottom: '1rem' }}>
             {assigningQr ? (
               <div>
@@ -307,10 +298,12 @@ function AdminPage({ onHome, onSelectTool }) {
                 </button>
               </div>
             ) : qrCode ? (
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ color: colors.textMuted }}>{qrCode}</span>
-                <button type="button" onClick={handleStartAssignQr} style={secondaryBtnStyle}>Rescan</button>
-                <button type="button" onClick={() => setQrCode('')} style={secondaryBtnStyle}>Clear</button>
+              <div>
+                <p style={{ color: colors.textMuted, marginBottom: '0.5rem' }}>{qrCode}</p>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button type="button" onClick={handleStartAssignQr} style={secondaryBtnStyle}>Rescan</button>
+                  <button type="button" onClick={() => setQrCode('')} style={secondaryBtnStyle}>Clear</button>
+                </div>
               </div>
             ) : (
               <button type="button" onClick={handleStartAssignQr} style={secondaryBtnStyle}>
