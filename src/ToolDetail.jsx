@@ -19,6 +19,21 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [newPhoto, setNewPhoto] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const scannerRef = useRef(null);
+  const qrPanelRef = useRef(null);
+  const locationPanelRef = useRef(null);
+  const photoPanelRef = useRef(null);
+
+  useEffect(() => {
+    if (assigningQr) qrPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [assigningQr]);
+
+  useEffect(() => {
+    if (assigningLocation) locationPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [assigningLocation]);
+
+  useEffect(() => {
+    if (updatingPhoto) photoPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [updatingPhoto]);
 
   const fetchTool = async () => {
     const { data } = await supabase.from('tools').select('*').eq('id', toolId).single();
@@ -351,7 +366,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           )}
 
           {isAdmin && updatingPhoto && (
-            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+            <div ref={photoPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
               {!newPhoto ? (
                 <>
                   <CameraCapture onCapture={setNewPhoto} capturing={false} label="Capture Tool Photo" />
@@ -379,7 +394,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           )}
 
           {isAdmin && assigningLocation && (
-            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+            <div ref={locationPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
               <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
                 Location
               </label>
@@ -400,7 +415,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           )}
 
           {isAdmin && assigningQr && (
-            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+            <div ref={qrPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
               {!scannedQr ? (
                 <>
                   <div id="qr-assign-reader" style={{ width: '100%' }}></div>
