@@ -368,13 +368,13 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
 
           {isAdmin && (
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <button onClick={handleStartAssignQr} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
+              <button onClick={handleStartAssignQr} style={{ ...(assigningQr ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                 Assign QR Code
               </button>
-              <button onClick={handleStartAssignLocation} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
+              <button onClick={handleStartAssignLocation} style={{ ...(assigningLocation ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                 Assign Location
               </button>
-              <button onClick={handleStartUpdatePhoto} style={{ ...secondaryBtnStyle, marginTop: 0 }}>
+              <button onClick={handleStartUpdatePhoto} style={{ ...(updatingPhoto ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                 Update Photo
               </button>
               <button onClick={handleDelete} style={{ ...secondaryBtnStyle, color: '#ff8080', marginTop: 0 }}>
