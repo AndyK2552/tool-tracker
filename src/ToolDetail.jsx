@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
-import CameraCapture from './CameraCapture';
+import { useCameraCapture } from './useCameraCapture';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
@@ -22,6 +22,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const qrPanelRef = useRef(null);
   const locationPanelRef = useRef(null);
   const photoPanelRef = useRef(null);
+  const { open: openPhotoCamera, error: photoCameraError, input: photoCameraInput } = useCameraCapture(setNewPhoto);
 
   useEffect(() => {
     if (!assigningQr || !qrPanelRef.current) return;
@@ -209,6 +210,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningQr(false);
     setAssigningLocation(false);
     setUpdatingPhoto(true);
+    openPhotoCamera();
   };
 
   const handleCancelUpdatePhoto = () => {
@@ -387,10 +389,9 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
             <div ref={photoPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
               {!newPhoto ? (
                 <>
-                  <CameraCapture onCapture={setNewPhoto} capturing={false} label="Capture Tool Photo" />
-                  <button onClick={handleCancelUpdatePhoto} style={{ ...secondaryBtnStyle, marginTop: '0.75rem' }}>
-                    Cancel
-                  </button>
+                  <p style={{ color: colors.textMuted }}>Opening camera...</p>
+                  {photoCameraError && <p style={{ color: '#ff8080' }}>{photoCameraError}</p>}
+                  <button onClick={handleCancelUpdatePhoto} style={secondaryBtnStyle}>Cancel</button>
                 </>
               ) : (
                 <>
@@ -403,13 +404,14 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
                     <button onClick={handleSubmitPhoto} disabled={uploadingPhoto} style={btnStyle}>
                       {uploadingPhoto ? 'Uploading...' : 'Submit'}
                     </button>
-                    <button onClick={() => setNewPhoto(null)} style={secondaryBtnStyle}>Retake</button>
+                    <button onClick={() => { setNewPhoto(null); openPhotoCamera(); }} style={secondaryBtnStyle}>Retake</button>
                     <button onClick={handleCancelUpdatePhoto} style={secondaryBtnStyle}>Cancel</button>
                   </div>
                 </>
               )}
             </div>
           )}
+          {photoCameraInput}
 
           {isAdmin && assigningLocation && (
             <div ref={locationPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
-import CameraCapture from './CameraCapture';
+import { useCameraCapture } from './useCameraCapture';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
@@ -12,12 +12,33 @@ function AdminPage({ onHome, onSelectTool }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [scanning, setScanning] = useState(false);
-  const [showCamera, setShowCamera] = useState(true);
-  const [showToolCamera, setShowToolCamera] = useState(false);
   const [toolPhoto, setToolPhoto] = useState(null);
   const [assigningQr, setAssigningQr] = useState(false);
   const [qrCode, setQrCode] = useState('');
   const scannerRef = useRef(null);
+
+  const handleAICapture = async (base64) => {
+    setScanning(true);
+    setMessage(null);
+    try {
+      const response = await fetch('/api/analyze-tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to analyze image');
+      setName(result.name || '');
+      setSerial(result.serial || '');
+      setMessage({ type: 'info', text: 'Detected — please review and correct below before saving.' });
+    } catch (err) {
+      setMessage({ type: 'error', text: 'AI scan failed: ' + err.message });
+    }
+    setScanning(false);
+  };
+
+  const { open: openNameplateCamera, error: nameplateCameraError, input: nameplateCameraInput } = useCameraCapture(handleAICapture);
+  const { open: openToolPhotoCamera, error: toolPhotoCameraError, input: toolPhotoCameraInput } = useCameraCapture(setToolPhoto);
 
   const uploadToolImage = async (base64, qrCodeForPath) => {
     const byteString = atob(base64);
@@ -130,36 +151,9 @@ function AdminPage({ onHome, onSelectTool }) {
     setName('');
     setSerial('');
     setLocation('Shop');
-    setShowCamera(true);
     setToolPhoto(null);
     setQrCode('');
     setSaving(false);
-  };
-
-  const handleAICapture = async (base64) => {
-    setScanning(true);
-    setMessage(null);
-    setShowCamera(false);
-    try {
-      const response = await fetch('/api/analyze-tool', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Failed to analyze image');
-      setName(result.name || '');
-      setSerial(result.serial || '');
-      setMessage({ type: 'info', text: 'Detected — please review and correct below before saving.' });
-    } catch (err) {
-      setMessage({ type: 'error', text: 'AI scan failed: ' + err.message });
-    }
-    setScanning(false);
-  };
-
-  const handleToolPhotoCapture = (base64) => {
-    setToolPhoto(base64);
-    setShowToolCamera(false);
   };
 
   const handleStartAssignQr = () => {
@@ -192,16 +186,16 @@ function AdminPage({ onHome, onSelectTool }) {
         </button>
 
         <div style={{ marginBottom: '1rem', maxWidth: '400px' }}>
-          {showCamera ? (
-            <CameraCapture onCapture={handleAICapture} capturing={scanning} label="Capture Tool Label" />
-          ) : scanning ? (
+          {scanning ? (
             <p style={{ color: colors.textMuted }}>Analyzing photo...</p>
           ) : (
-            <button type="button" onClick={() => setShowCamera(true)} style={btnStyle}>
+            <button type="button" onClick={openNameplateCamera} style={btnStyle}>
               🤖 Scan Tool
             </button>
           )}
+          {nameplateCameraError && <p style={{ color: '#ff8080', fontSize: '0.85rem' }}>{nameplateCameraError}</p>}
         </div>
+        {nameplateCameraInput}
 
         {message && (
           <p
@@ -259,9 +253,7 @@ function AdminPage({ onHome, onSelectTool }) {
 
           <label style={fieldLabelStyle}>Tool Photo</label>
           <div style={{ marginBottom: '1rem' }}>
-            {showToolCamera ? (
-              <CameraCapture onCapture={handleToolPhotoCapture} capturing={false} label="Capture Tool Photo" />
-            ) : toolPhoto ? (
+            {toolPhoto ? (
               <div>
                 <img
                   src={`data:image/jpeg;base64,${toolPhoto}`}
@@ -271,8 +263,8 @@ function AdminPage({ onHome, onSelectTool }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowToolCamera(true);
                     setToolPhoto(null);
+                    openToolPhotoCamera();
                   }}
                   style={secondaryBtnStyle}
                 >
@@ -280,11 +272,13 @@ function AdminPage({ onHome, onSelectTool }) {
                 </button>
               </div>
             ) : (
-              <button type="button" onClick={() => setShowToolCamera(true)} style={secondaryBtnStyle}>
+              <button type="button" onClick={openToolPhotoCamera} style={secondaryBtnStyle}>
                 📷 Take Picture of Tool
               </button>
             )}
+            {toolPhotoCameraError && <p style={{ color: '#ff8080', fontSize: '0.85rem' }}>{toolPhotoCameraError}</p>}
           </div>
+          {toolPhotoCameraInput}
 
           <label style={fieldLabelStyle}>QR Code</label>
           <div style={{ marginBottom: '1rem' }}>
