@@ -151,7 +151,7 @@ function Root() {
   }
 
   if (view === 'admin') {
-    return <AdminPage onHome={() => setView('home')} />
+    return <AdminPage onHome={() => setView('home')} onSelectTool={selectTool} />
   }
 
   if (view === 'users') {
