@@ -36,7 +36,7 @@ export function safePauseScanner(scanner, shouldPauseVideo) {
 // having to hold the phone right up against them. Not all devices/browsers
 // expose zoom control (notably iOS Safari often doesn't), so this silently
 // no-ops rather than failing the scan if it's unsupported.
-export async function applyDefaultZoom(scanner, targetZoom = 2) {
+export async function applyDefaultZoom(scanner, targetZoom = 3) {
   try {
     const zoom = scanner.getRunningTrackCameraCapabilities().zoomFeature();
     if (!zoom.isSupported()) return;
