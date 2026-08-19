@@ -165,7 +165,11 @@ function Root() {
     }
   }, [selectedToolId])
 
-  if (loading) return <p>Loading...</p>
+  if (loading) return (
+    <div style={{ background: colors.navy, minHeight: '100vh', padding: '1.25rem' }}>
+      <p style={{ color: colors.white }}>Loading...</p>
+    </div>
+  )
 
   if (!session) return <Auth />
 

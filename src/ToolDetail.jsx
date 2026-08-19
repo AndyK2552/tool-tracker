@@ -311,8 +311,16 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   };
 
 
-  if (loading) return <p style={{ color: colors.white, padding: '1rem' }}>Loading...</p>;
-  if (!tool) return <p style={{ color: colors.white, padding: '1rem' }}>Tool not found.</p>;
+  if (loading) return (
+    <div style={{ background: colors.navy, minHeight: '100vh', padding: '1.25rem' }}>
+      <p style={{ color: colors.white }}>Loading...</p>
+    </div>
+  );
+  if (!tool) return (
+    <div style={{ background: colors.navy, minHeight: '100vh', padding: '1.25rem' }}>
+      <p style={{ color: colors.white }}>Tool not found.</p>
+    </div>
+  );
 
   const canReturn = isAdmin || tool.checked_out_by === techProfile?.name;
 
