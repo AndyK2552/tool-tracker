@@ -285,7 +285,7 @@ function AdminPage({ onHome, onSelectTool }) {
               </div>
             ) : (
               <button type="button" onClick={openToolPhotoCamera} style={secondaryBtnStyle}>
-                📷 Take Picture of Tool
+                Take Picture of Tool
               </button>
             )}
             {toolPhotoCameraError && <p style={{ color: '#ff8080', fontSize: '0.85rem' }}>{toolPhotoCameraError}</p>}
@@ -314,7 +314,7 @@ function AdminPage({ onHome, onSelectTool }) {
               </div>
             ) : (
               <button type="button" onClick={handleStartAssignQr} style={secondaryBtnStyle}>
-                📷 Assign QR Code
+                Assign QR Code
               </button>
             )}
           </div>
