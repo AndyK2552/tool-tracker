@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import PageHeader from './PageHeader';
-import { colors, btnStyle } from './theme';
+import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
 const formatDuration = (checkedOutAt) => {
   const utcString = checkedOutAt.endsWith('Z') ? checkedOutAt : checkedOutAt + 'Z';
@@ -26,6 +26,11 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
   const [user, setUser] = useState(null);
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editIsAdmin, setEditIsAdmin] = useState(false);
+  const [message, setMessage] = useState(null);
 
   const fetchData = async () => {
     const { data: userData } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -48,6 +53,36 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
     fetchData();
   }, [userId]);
 
+  const startEdit = () => {
+    setEditName(user.name || '');
+    setEditEmail(user.email || '');
+    setEditIsAdmin(!!user.is_admin);
+    setMessage(null);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+  };
+
+  const saveEdit = async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ name: editName.trim(), email: editEmail.trim(), is_admin: editIsAdmin })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+
+    setUser(data);
+    setEditing(false);
+    setMessage({ type: 'success', text: 'User updated.' });
+  };
+
   const cardStyle = {
     background: colors.navyLight,
     border: `0.5px solid ${colors.navyBorder}`,
@@ -64,6 +99,9 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
     objectFit: 'cover',
     flexShrink: 0,
   };
+
+  const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '0.5rem', borderRadius: '6px', border: 'none', marginBottom: '0.5rem' };
+  const labelStyle = { display: 'block', color: colors.white, fontSize: '13px', marginBottom: '0.25rem' };
 
   if (loading) return (
     <div style={{ background: colors.navy, minHeight: '100vh', padding: '1.25rem' }}>
@@ -89,10 +127,39 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
           Home
         </button>
 
+        {message && (
+          <p style={{ color: message.type === 'error' ? '#ff8080' : '#5FCF7A', marginBottom: '1rem' }}>
+            {message.text}
+          </p>
+        )}
+
         <div style={{ background: colors.navyLight, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '8px', padding: '1rem', maxWidth: '400px', marginBottom: '1.5rem' }}>
-          <h1 style={{ color: colors.white, fontSize: '20px', margin: '0 0 0.5rem' }}>{user.name}</h1>
-          <p style={{ color: colors.textMuted, margin: '0 0 4px' }}>{user.email}</p>
-          <p style={{ color: colors.textMuted, margin: 0 }}>{user.is_admin ? 'Admin' : 'Tech'}</p>
+          {editing ? (
+            <>
+              <label style={labelStyle}>Name</label>
+              <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} style={inputStyle} />
+
+              <label style={labelStyle}>Email</label>
+              <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} style={inputStyle} />
+
+              <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                <input type="checkbox" checked={editIsAdmin} onChange={(e) => setEditIsAdmin(e.target.checked)} />
+                Admin
+              </label>
+
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button onClick={saveEdit} style={btnStyle}>Save</button>
+                <button onClick={cancelEdit} style={secondaryBtnStyle}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 style={{ color: colors.white, fontSize: '20px', margin: '0 0 0.5rem' }}>{user.name}</h1>
+              <p style={{ color: colors.textMuted, margin: '0 0 4px' }}>{user.email}</p>
+              <p style={{ color: colors.textMuted, margin: '0 0 0.75rem' }}>{user.is_admin ? 'Admin' : 'Tech'}</p>
+              <button onClick={startEdit} style={secondaryBtnStyle}>Edit</button>
+            </>
+          )}
         </div>
 
         <h2 style={{ color: colors.white, fontSize: '16px' }}>Checked Out Tools ({tools.length})</h2>
