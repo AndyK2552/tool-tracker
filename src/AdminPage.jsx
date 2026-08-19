@@ -18,6 +18,11 @@ function AdminPage({ onHome, onSelectTool }) {
   const [qrCode, setQrCode] = useState('');
   const scannerRef = useRef(null);
   const qrPanelRef = useRef(null);
+  const messageRef = useRef(null);
+
+  useEffect(() => {
+    if (message) messageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [message]);
 
   const handleAICapture = async (base64) => {
     setScanning(true);
@@ -211,6 +216,7 @@ function AdminPage({ onHome, onSelectTool }) {
 
         {message && (
           <p
+            ref={messageRef}
             style={{
               color: message.type === 'error' ? '#ff8080' : message.type === 'info' ? colors.textMuted : '#5FCF7A',
               marginBottom: '1rem',
@@ -270,7 +276,7 @@ function AdminPage({ onHome, onSelectTool }) {
                 <img
                   src={`data:image/jpeg;base64,${toolPhoto}`}
                   alt="Tool"
-                  style={{ width: '100%', maxWidth: '250px', borderRadius: '8px', display: 'block', marginBottom: '0.5rem' }}
+                  style={{ width: '100%', maxWidth: '250px', borderRadius: '8px', display: 'block', margin: '0 auto 0.5rem' }}
                 />
                 <button
                   type="button"

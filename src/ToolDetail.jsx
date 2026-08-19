@@ -25,7 +25,12 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const qrPanelRef = useRef(null);
   const locationPanelRef = useRef(null);
   const photoPanelRef = useRef(null);
+  const messageRef = useRef(null);
   const { open: openPhotoCamera, error: photoCameraError, input: photoCameraInput } = useCameraCapture(setNewPhoto);
+
+  useEffect(() => {
+    if (message) messageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [message]);
 
   useEffect(() => {
     if (!assigningQr || !qrPanelRef.current) return;
@@ -506,7 +511,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
                   <img
                     src={`data:image/jpeg;base64,${newPhoto}`}
                     alt="New tool"
-                    style={{ width: '100%', maxWidth: '250px', borderRadius: '8px', display: 'block', marginBottom: '0.75rem' }}
+                    style={{ width: '100%', maxWidth: '250px', borderRadius: '8px', display: 'block', margin: '0 auto 0.75rem' }}
                   />
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <button onClick={handleSubmitPhoto} disabled={uploadingPhoto} style={btnStyle}>
@@ -580,7 +585,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
         </div>
 
         {message && (
-          <p style={{ color: message.type === 'error' ? '#ff8080' : '#5FCF7A', marginTop: '1rem' }}>
+          <p ref={messageRef} style={{ color: message.type === 'error' ? '#ff8080' : '#5FCF7A', marginTop: '1rem' }}>
             {message.text}
             {message.link && (
               <button
