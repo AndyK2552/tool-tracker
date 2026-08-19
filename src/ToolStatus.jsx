@@ -26,6 +26,7 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [locationFilter, setLocationFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('available');
 
   const fetchTools = async () => {
     const { data, error } = await supabase
@@ -114,49 +115,74 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '250px' }}>
-            <h2 style={{ color: colors.white, fontSize: '16px' }}>Available ({available.length})</h2>
-            {available.length === 0 && <p style={{ color: colors.textMuted }}>No tools currently available.</p>}
-            {available.map((tool) => (
-              <div key={tool.id} onClick={() => onSelectTool(tool.id)} style={{ ...cardStyle, display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                {tool.image_url ? (
-                  <img src={tool.image_url} alt={tool.name} style={thumbnailStyle} />
-                ) : (
-                  <div style={thumbnailPlaceholderStyle} />
-                )}
-                <div>
-                  <span style={{ color: '#5FCF7A', marginRight: '0.5rem' }}>●</span>
-                  <strong style={{ color: colors.white }}>{tool.name}</strong>
-                  <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>{tool.id}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+          <button
+            onClick={() => setStatusFilter('available')}
+            style={{
+              padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold',
+              border: `0.5px solid ${colors.navyBorder}`,
+              background: statusFilter === 'available' ? colors.gold : colors.navyLight,
+              color: statusFilter === 'available' ? colors.navy : colors.white,
+            }}
+          >
+            Available ({available.length})
+          </button>
+          <button
+            onClick={() => setStatusFilter('checkedOut')}
+            style={{
+              padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold',
+              border: `0.5px solid ${colors.navyBorder}`,
+              background: statusFilter === 'checkedOut' ? colors.gold : colors.navyLight,
+              color: statusFilter === 'checkedOut' ? colors.navy : colors.white,
+            }}
+          >
+            Checked Out ({checkedOut.length})
+          </button>
+        </div>
 
-          <div style={{ flex: 1, minWidth: '250px' }}>
-            <h2 style={{ color: colors.white, fontSize: '16px' }}>Checked Out ({checkedOut.length})</h2>
-            {checkedOut.length === 0 && <p style={{ color: colors.textMuted }}>No tools currently checked out.</p>}
-            {checkedOut.map((tool) => (
-              <div key={tool.id} onClick={() => onSelectTool(tool.id)} style={{ ...cardStyle, display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                {tool.image_url ? (
-                  <img src={tool.image_url} alt={tool.name} style={thumbnailStyle} />
-                ) : (
-                  <div style={thumbnailPlaceholderStyle} />
-                )}
-                <div>
-                  <span style={{ color: '#E0645A', marginRight: '0.5rem' }}>●</span>
-                  <strong style={{ color: colors.white }}>{tool.name}</strong>
-                  <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>
-                    {tool.id}<br />
-                    Checked out by: {tool.checked_out_by}
-                    {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}<br />
-                    Duration: {formatDuration(tool.checked_out_at)}
-                  </p>
+        <div style={{ maxWidth: '450px' }}>
+          {statusFilter === 'available' ? (
+            <>
+              {available.length === 0 && <p style={{ color: colors.textMuted }}>No tools currently available.</p>}
+              {available.map((tool) => (
+                <div key={tool.id} onClick={() => onSelectTool(tool.id)} style={{ ...cardStyle, display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                  {tool.image_url ? (
+                    <img src={tool.image_url} alt={tool.name} style={thumbnailStyle} />
+                  ) : (
+                    <div style={thumbnailPlaceholderStyle} />
+                  )}
+                  <div>
+                    <span style={{ color: '#5FCF7A', marginRight: '0.5rem' }}>●</span>
+                    <strong style={{ color: colors.white }}>{tool.name}</strong>
+                    <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>{tool.id}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {checkedOut.length === 0 && <p style={{ color: colors.textMuted }}>No tools currently checked out.</p>}
+              {checkedOut.map((tool) => (
+                <div key={tool.id} onClick={() => onSelectTool(tool.id)} style={{ ...cardStyle, display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                  {tool.image_url ? (
+                    <img src={tool.image_url} alt={tool.name} style={thumbnailStyle} />
+                  ) : (
+                    <div style={thumbnailPlaceholderStyle} />
+                  )}
+                  <div>
+                    <span style={{ color: '#E0645A', marginRight: '0.5rem' }}>●</span>
+                    <strong style={{ color: colors.white }}>{tool.name}</strong>
+                    <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>
+                      {tool.id}<br />
+                      Checked out by: {tool.checked_out_by}
+                      {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}<br />
+                      Duration: {formatDuration(tool.checked_out_at)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>
