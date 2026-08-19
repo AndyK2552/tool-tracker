@@ -55,6 +55,12 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
     return t.location === locationFilter;
   });
 
+  const locationCount = (option) => {
+    if (option === 'All') return tools.length;
+    if (option === 'My Tools') return tools.filter((t) => t.checked_out_by === techName).length;
+    return tools.filter((t) => t.location === option).length;
+  };
+
   const grouped = { Available: [], 'Checked Out': [], Pending: [], Damaged: [] };
   for (const tool of locationFilteredTools) {
     grouped[getToolStatus(tool)].push(tool);
@@ -117,7 +123,7 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
                 color: locationFilter === option ? colors.navy : colors.white,
               }}
             >
-              {option}
+              {option} ({locationCount(option)})
             </button>
           ))}
         </div>
