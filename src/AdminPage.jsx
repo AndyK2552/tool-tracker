@@ -17,6 +17,7 @@ function AdminPage({ onHome, onSelectTool }) {
   const [assigningQr, setAssigningQr] = useState(false);
   const [qrCode, setQrCode] = useState('');
   const scannerRef = useRef(null);
+  const qrPanelRef = useRef(null);
 
   const handleAICapture = async (base64) => {
     setScanning(true);
@@ -82,6 +83,16 @@ function AdminPage({ onHome, onSelectTool }) {
     return () => {
       safeStopScanner(scanner);
     };
+  }, [assigningQr]);
+
+  useEffect(() => {
+    if (!assigningQr || !qrPanelRef.current) return;
+    const el = qrPanelRef.current;
+    const observer = new ResizeObserver(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [assigningQr]);
 
   const handleAddTool = async (e) => {
@@ -284,7 +295,7 @@ function AdminPage({ onHome, onSelectTool }) {
           <label style={fieldLabelStyle}>QR Code</label>
           <div style={{ marginBottom: '1rem' }}>
             {assigningQr ? (
-              <div>
+              <div ref={qrPanelRef}>
                 <div id="qr-add-reader" style={{ width: '100%' }}></div>
                 <p style={{ fontSize: '0.85rem', color: colors.textMuted, marginTop: '0.5rem' }}>
                   Point the camera at the QR code — it'll scan automatically.
