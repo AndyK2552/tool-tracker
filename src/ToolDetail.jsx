@@ -20,6 +20,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
   const [newPhoto, setNewPhoto] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const scannerRef = useRef(null);
   const qrPanelRef = useRef(null);
   const locationPanelRef = useRef(null);
@@ -249,11 +250,15 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setUploadingPhoto(false);
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm(`Are you sure you want to delete "${tool.name}"? This cannot be undone.`)) return;
+  const handleDelete = () => {
+    setConfirmingDelete(true);
+  };
+
+  const confirmDelete = async () => {
     const { error } = await supabase.from('tools').delete().eq('id', tool.id);
     if (error) {
       setMessage({ type: 'error', text: error.message });
+      setConfirmingDelete(false);
     } else {
       onBackToStatus();
     }
@@ -591,6 +596,31 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           </p>
         )}
       </div>
+
+      {confirmingDelete && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.25rem', zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              background: colors.navy, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '12px',
+              padding: '1.5rem', maxWidth: '360px', width: '100%',
+            }}
+          >
+            <h2 style={{ color: colors.white, fontSize: '18px', margin: '0 0 0.75rem' }}>Delete Tool</h2>
+            <p style={{ color: colors.textMuted, margin: 0 }}>
+              Are you sure you want to delete "{tool.name}"? This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button onClick={() => setConfirmingDelete(false)} style={secondaryBtnStyle}>Cancel</button>
+              <button onClick={confirmDelete} style={{ ...btnStyle, background: '#E0645A', color: colors.white }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
