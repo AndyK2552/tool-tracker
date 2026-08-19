@@ -14,6 +14,7 @@ import ManageUsers from './ManageUsers.jsx'
 import UserDetail from './UserDetail.jsx'
 import { colors } from './theme'
 import { installGlobalCrashLogging, getLastCrash, clearLastCrash, logCrash } from './crashLog.js'
+import { useRegisterSW } from 'virtual:pwa-register/react'
 
 installGlobalCrashLogging()
 
@@ -63,6 +64,27 @@ function CrashBanner() {
         style={{ marginTop: '0.5rem', padding: '0.3rem 0.75rem', borderRadius: '6px', border: 'none', background: colors.navyLight, color: colors.white, cursor: 'pointer' }}
       >
         Dismiss
+      </button>
+    </div>
+  )
+}
+
+function UpdateBanner() {
+  const {
+    needRefresh: [needRefresh],
+    updateServiceWorker,
+  } = useRegisterSW()
+
+  if (!needRefresh) return null
+
+  return (
+    <div style={{ background: colors.gold, color: colors.navy, padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+      <strong>A new version is available.</strong>
+      <button
+        onClick={() => updateServiceWorker()}
+        style={{ padding: '0.4rem 0.9rem', borderRadius: '6px', border: 'none', background: colors.navy, color: colors.white, fontWeight: 'bold', cursor: 'pointer' }}
+      >
+        Update Now
       </button>
     </div>
   )
@@ -280,6 +302,7 @@ function Root() {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
+      <UpdateBanner />
       <CrashBanner />
       <Root />
     </ErrorBoundary>

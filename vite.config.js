@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
+      injectRegister: false,
       devOptions: {
         enabled: true,
       },
