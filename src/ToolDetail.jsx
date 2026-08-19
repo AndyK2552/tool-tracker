@@ -17,6 +17,8 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [scannedQr, setScannedQr] = useState('');
   const [assigningLocation, setAssigningLocation] = useState(false);
   const [newLocation, setNewLocation] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState('');
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
   const [newPhoto, setNewPhoto] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -24,6 +26,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const scannerRef = useRef(null);
   const qrPanelRef = useRef(null);
   const locationPanelRef = useRef(null);
+  const namePanelRef = useRef(null);
   const photoPanelRef = useRef(null);
   const messageRef = useRef(null);
   const { open: openPhotoCamera, error: photoCameraError, input: photoCameraInput } = useCameraCapture(setNewPhoto);
@@ -45,6 +48,10 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   useEffect(() => {
     if (assigningLocation) locationPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [assigningLocation]);
+
+  useEffect(() => {
+    if (editingName) namePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [editingName]);
 
   useEffect(() => {
     if (!updatingPhoto || !photoPanelRef.current) return;
@@ -103,6 +110,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage(null);
     setAssigningLocation(false);
     setUpdatingPhoto(false);
+    setEditingName(false);
     setAssigningQr(true);
   };
 
@@ -166,6 +174,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage(null);
     setAssigningQr(false);
     setUpdatingPhoto(false);
+    setEditingName(false);
     setAssigningLocation(true);
   };
 
@@ -195,6 +204,41 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage({ type: 'success', text: 'Location updated.' });
   };
 
+  const handleStartEditName = () => {
+    setNewName(tool.name || '');
+    setMessage(null);
+    setAssigningQr(false);
+    setAssigningLocation(false);
+    setUpdatingPhoto(false);
+    setEditingName(true);
+  };
+
+  const handleCancelEditName = () => {
+    setEditingName(false);
+    setNewName('');
+  };
+
+  const handleSubmitName = async () => {
+    if (!newName.trim()) return;
+
+    const { data, error } = await supabase
+      .from('tools')
+      .update({ name: newName.trim() })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+
+    setTool(data);
+    setEditingName(false);
+    setNewName('');
+    setMessage({ type: 'success', text: 'Tool name updated.' });
+  };
+
   const uploadToolImage = async (base64, pathSeed) => {
     const byteString = atob(base64);
     const bytes = new Uint8Array(byteString.length);
@@ -217,6 +261,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage(null);
     setAssigningQr(false);
     setAssigningLocation(false);
+    setEditingName(false);
     setUpdatingPhoto(true);
     openPhotoCamera();
   };
@@ -478,6 +523,11 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           {canManage && (
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
               {isAdmin && (
+                <button onClick={handleStartEditName} style={{ ...(editingName ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
+                  Edit Name
+                </button>
+              )}
+              {isAdmin && (
                 <button onClick={handleStartAssignQr} style={{ ...(assigningQr ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                   Assign QR Code
                 </button>
@@ -525,6 +575,26 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
             </div>
           )}
           {photoCameraInput}
+
+          {isAdmin && editingName && (
+            <div ref={namePanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+              <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
+                Tool Name
+              </label>
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                style={{
+                  width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.75rem', boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button onClick={handleSubmitName} style={btnStyle}>Submit</button>
+                <button onClick={handleCancelEditName} style={secondaryBtnStyle}>Cancel</button>
+              </div>
+            </div>
+          )}
 
           {canManage && assigningLocation && (
             <div ref={locationPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
