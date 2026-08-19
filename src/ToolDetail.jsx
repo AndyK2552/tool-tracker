@@ -377,20 +377,26 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
             <button onClick={() => handleCheckOut(techProfile.name)} style={btnStyle}>Check Out</button>
           )}
 
-          {isAdmin && (
+          {canReturn && (
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <button onClick={handleStartAssignQr} style={{ ...(assigningQr ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
-                Assign QR Code
-              </button>
+              {isAdmin && (
+                <button onClick={handleStartAssignQr} style={{ ...(assigningQr ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
+                  Assign QR Code
+                </button>
+              )}
               <button onClick={handleStartAssignLocation} style={{ ...(assigningLocation ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                 Assign Location
               </button>
-              <button onClick={handleStartUpdatePhoto} style={{ ...(updatingPhoto ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
-                Update Photo
-              </button>
-              <button onClick={handleDelete} style={{ ...secondaryBtnStyle, color: '#ff8080', marginTop: 0 }}>
-                Delete Tool
-              </button>
+              {isAdmin && (
+                <button onClick={handleStartUpdatePhoto} style={{ ...(updatingPhoto ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
+                  Update Photo
+                </button>
+              )}
+              {isAdmin && (
+                <button onClick={handleDelete} style={{ ...secondaryBtnStyle, color: '#ff8080', marginTop: 0 }}>
+                  Delete Tool
+                </button>
+              )}
             </div>
           )}
 
@@ -422,7 +428,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           )}
           {photoCameraInput}
 
-          {isAdmin && assigningLocation && (
+          {canReturn && assigningLocation && (
             <div ref={locationPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
               <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
                 Location

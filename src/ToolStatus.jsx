@@ -22,7 +22,7 @@ const formatDuration = (checkedOutAt) => {
   return parts.join(' ');
 };
 
-function ToolStatus({ onHome, onSelectTool, isAdmin }) {
+function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [locationFilter, setLocationFilter] = useState('All');
@@ -45,7 +45,11 @@ function ToolStatus({ onHome, onSelectTool, isAdmin }) {
     return () => clearInterval(interval);
   }, []);
 
-  const locationFilteredTools = tools.filter((t) => locationFilter === 'All' || t.location === locationFilter);
+  const locationFilteredTools = tools.filter((t) => {
+    if (locationFilter === 'All') return true;
+    if (locationFilter === 'My Tools') return t.checked_out_by === techName;
+    return t.location === locationFilter;
+  });
   const available = locationFilteredTools.filter((t) => !t.is_checked_out);
   const checkedOut = locationFilteredTools
     .filter((t) => t.is_checked_out)
@@ -94,7 +98,7 @@ function ToolStatus({ onHome, onSelectTool, isAdmin }) {
         <h1 style={{ color: colors.white, fontSize: '20px' }}>Tool Status</h1>
 
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-          {['All', 'Truck', 'Shop'].map((option) => (
+          {['All', 'Truck', 'Shop', 'My Tools'].map((option) => (
             <button
               key={option}
               onClick={() => setLocationFilter(option)}

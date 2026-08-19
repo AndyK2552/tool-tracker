@@ -207,6 +207,7 @@ function Root() {
         onHome={() => setView(profile.is_admin ? 'home' : 'scanner')}
         onSelectTool={selectTool}
         isAdmin={profile.is_admin}
+        techName={profile.name}
       />
     )
   }
