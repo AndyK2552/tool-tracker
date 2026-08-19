@@ -307,7 +307,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const handleMarkDamaged = async () => {
     const { data, error } = await supabase
       .from('tools')
-      .update({ condition: 'Damaged', checked_out_by: null })
+      .update({ condition: 'Damaged' })
       .eq('id', tool.id)
       .select()
       .single();
@@ -328,7 +328,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const handleMarkRepaired = async () => {
     const { data, error } = await supabase
       .from('tools')
-      .update({ condition: 'Ready' })
+      .update({ condition: 'Ready', checked_out_by: null })
       .eq('id', tool.id)
       .select()
       .single();
