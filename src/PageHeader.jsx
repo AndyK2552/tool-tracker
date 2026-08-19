@@ -12,8 +12,8 @@ function PageHeader({ title }) {
         color: colors.white,
       }}
     >
-      <img src="/KYPD%20Logo.PNG" alt="KYPD" style={{ width: '32px', height: '32px' }} />
-      <span style={{ fontSize: '15px', fontWeight: 500 }}>{title}</span>
+      <img src="/KYPD%20Logo.PNG" alt="KYPD" style={{ width: '48px', height: '48px' }} />
+      <span style={{ fontSize: '16px', fontWeight: 500 }}>{title}</span>
     </div>
   );
 }
