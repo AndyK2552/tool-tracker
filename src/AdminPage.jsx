@@ -191,7 +191,7 @@ function AdminPage({ onHome, onSelectTool }) {
             <p style={{ color: colors.textMuted }}>Analyzing photo...</p>
           ) : (
             <button type="button" onClick={openNameplateCamera} style={btnStyle}>
-              🤖 Scan Tool
+              Scan Tool
             </button>
           )}
           {nameplateCameraError && <p style={{ color: '#ff8080', fontSize: '0.85rem' }}>{nameplateCameraError}</p>}
