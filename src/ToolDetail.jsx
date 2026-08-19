@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import { useCameraCapture } from './useCameraCapture';
-import { safeStopScanner, safePauseScanner } from './qrScannerUtils';
+import { safeStopScanner, safePauseScanner, applyDefaultZoom } from './qrScannerUtils';
 import { getToolStatus } from './toolStatus';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
@@ -17,6 +17,9 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [scannedQr, setScannedQr] = useState('');
   const [assigningLocation, setAssigningLocation] = useState(false);
   const [newLocation, setNewLocation] = useState('');
+  const [assigningBeacon, setAssigningBeacon] = useState(false);
+  const [newBeaconMac, setNewBeaconMac] = useState('');
+  const [newBeaconThreshold, setNewBeaconThreshold] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
@@ -26,6 +29,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const scannerRef = useRef(null);
   const qrPanelRef = useRef(null);
   const locationPanelRef = useRef(null);
+  const beaconPanelRef = useRef(null);
   const namePanelRef = useRef(null);
   const photoPanelRef = useRef(null);
   const messageRef = useRef(null);
@@ -48,6 +52,23 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   useEffect(() => {
     if (assigningLocation) locationPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [assigningLocation]);
+
+  useEffect(() => {
+    if (assigningBeacon) beaconPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [assigningBeacon]);
+
+  useEffect(() => {
+    if (!tool?.id) return;
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('tools')
+        .select('beacon_alarm_active, beacon_last_seen')
+        .eq('id', tool.id)
+        .single();
+      if (data) setTool((t) => (t ? { ...t, ...data } : t));
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [tool?.id]);
 
   useEffect(() => {
     if (editingName) namePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -96,6 +117,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
         },
         () => {}
       )
+      .then(() => applyDefaultZoom(scanner))
       .catch((err) => {
         setMessage({ type: 'error', text: 'Could not start camera: ' + err });
       });
@@ -175,6 +197,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningQr(false);
     setUpdatingPhoto(false);
     setEditingName(false);
+    setAssigningBeacon(false);
     setAssigningLocation(true);
   };
 
@@ -204,11 +227,71 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage({ type: 'success', text: 'Location updated.' });
   };
 
+  const handleStartAssignBeacon = () => {
+    setNewBeaconMac(tool.beacon_mac || '');
+    setNewBeaconThreshold(tool.beacon_rssi_threshold != null ? String(tool.beacon_rssi_threshold) : '-75');
+    setMessage(null);
+    setAssigningQr(false);
+    setAssigningLocation(false);
+    setUpdatingPhoto(false);
+    setEditingName(false);
+    setAssigningBeacon(true);
+  };
+
+  const handleCancelAssignBeacon = () => {
+    setAssigningBeacon(false);
+    setNewBeaconMac('');
+    setNewBeaconThreshold('');
+  };
+
+  const handleSubmitBeacon = async () => {
+    const trimmedMac = newBeaconMac.trim();
+    const macPattern = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
+    if (trimmedMac && !macPattern.test(trimmedMac)) {
+      setMessage({ type: 'error', text: 'Beacon MAC must look like AA:BB:CC:DD:EE:FF.' });
+      return;
+    }
+
+    const threshold = parseInt(newBeaconThreshold, 10);
+    if (isNaN(threshold) || threshold > 0) {
+      setMessage({ type: 'error', text: 'RSSI threshold must be a negative number (e.g. -75).' });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('tools')
+      .update({
+        beacon_mac: trimmedMac ? trimmedMac.toUpperCase() : null,
+        beacon_rssi_threshold: threshold,
+        beacon_alarm_active: false,
+        beacon_last_seen: null,
+      })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        setMessage({ type: 'error', text: 'That beacon MAC is already assigned to another tool.' });
+      } else {
+        setMessage({ type: 'error', text: error.message });
+      }
+      return;
+    }
+
+    setTool(data);
+    setAssigningBeacon(false);
+    setNewBeaconMac('');
+    setNewBeaconThreshold('');
+    setMessage({ type: 'success', text: trimmedMac ? 'Beacon assigned.' : 'Beacon removed.' });
+  };
+
   const handleStartEditName = () => {
     setNewName(tool.name || '');
     setMessage(null);
     setAssigningQr(false);
     setAssigningLocation(false);
+    setAssigningBeacon(false);
     setUpdatingPhoto(false);
     setEditingName(true);
   };
@@ -261,6 +344,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage(null);
     setAssigningQr(false);
     setAssigningLocation(false);
+    setAssigningBeacon(false);
     setEditingName(false);
     setUpdatingPhoto(true);
     openPhotoCamera();
@@ -479,6 +563,14 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>QR Code:</strong> {tool.qr_code || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Location:</strong> {tool.location || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Status:</strong> {status}</p>
+          {tool.beacon_mac && (
+            <p style={{ color: colors.textMuted }}>
+              <strong style={{ color: colors.white }}>Beacon:</strong> {tool.beacon_mac} (alarm above {tool.beacon_rssi_threshold} dBm)
+              {tool.beacon_alarm_active && (
+                <span style={{ color: '#ff8080', fontWeight: 'bold', marginLeft: '0.5rem' }}>⚠ Near door</span>
+              )}
+            </p>
+          )}
           <p style={{ color: colors.textMuted }}>
             <strong style={{ color: colors.white }}>{status === 'Checked Out' ? 'Checked out by:' : 'Last returned by:'}</strong> {tool.checked_out_by || '—'}
           </p>
@@ -540,6 +632,11 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               <button onClick={handleStartAssignLocation} style={{ ...(assigningLocation ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                 Assign Location
               </button>
+              {isAdmin && (
+                <button onClick={handleStartAssignBeacon} style={{ ...(assigningBeacon ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
+                  {tool.beacon_mac ? 'Edit Beacon' : 'Assign Beacon'}
+                </button>
+              )}
               {isAdmin && (
                 <button onClick={handleStartUpdatePhoto} style={{ ...(updatingPhoto ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                   Update Photo
@@ -618,6 +715,42 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button onClick={handleSubmitLocation} style={btnStyle}>Submit</button>
                 <button onClick={handleCancelAssignLocation} style={secondaryBtnStyle}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {isAdmin && assigningBeacon && (
+            <div ref={beaconPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+              <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
+                Beacon MAC Address
+              </label>
+              <input
+                type="text"
+                value={newBeaconMac}
+                onChange={(e) => setNewBeaconMac(e.target.value)}
+                placeholder="AA:BB:CC:DD:EE:FF"
+                style={{
+                  width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.75rem', boxSizing: 'border-box',
+                }}
+              />
+              <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
+                Alarm RSSI Threshold (dBm)
+              </label>
+              <input
+                type="number"
+                value={newBeaconThreshold}
+                onChange={(e) => setNewBeaconThreshold(e.target.value)}
+                placeholder="-75"
+                style={{
+                  width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.5rem', boxSizing: 'border-box',
+                }}
+              />
+              <p style={{ fontSize: '0.8rem', color: colors.textMuted, marginTop: 0, marginBottom: '0.75rem' }}>
+                The board sits at the shop door. The buzzer sounds when this tool is Available and its beacon's signal rises above this threshold (stronger/less negative = closer to the door). Leave the MAC blank and submit to remove the beacon.
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button onClick={handleSubmitBeacon} style={btnStyle}>Submit</button>
+                <button onClick={handleCancelAssignBeacon} style={secondaryBtnStyle}>Cancel</button>
               </div>
             </div>
           )}

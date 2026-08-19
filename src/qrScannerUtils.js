@@ -31,3 +31,18 @@ export function safePauseScanner(scanner, shouldPauseVideo) {
     // already paused or stopped — nothing to do
   }
 }
+
+// Zooms the camera in a bit so small QR stickers are readable without
+// having to hold the phone right up against them. Not all devices/browsers
+// expose zoom control (notably iOS Safari often doesn't), so this silently
+// no-ops rather than failing the scan if it's unsupported.
+export async function applyDefaultZoom(scanner, targetZoom = 2) {
+  try {
+    const zoom = scanner.getRunningTrackCameraCapabilities().zoomFeature();
+    if (!zoom.isSupported()) return;
+    const clamped = Math.min(Math.max(targetZoom, zoom.min()), zoom.max());
+    await zoom.apply(clamped);
+  } catch {
+    // zoom control not available on this device/browser
+  }
+}

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import { useCameraCapture } from './useCameraCapture';
-import { safeStopScanner, safePauseScanner } from './qrScannerUtils';
+import { safeStopScanner, safePauseScanner, applyDefaultZoom } from './qrScannerUtils';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
@@ -81,6 +81,7 @@ function AdminPage({ onHome, onSelectTool }) {
         },
         () => {}
       )
+      .then(() => applyDefaultZoom(scanner))
       .catch((err) => {
         setMessage({ type: 'error', text: 'Could not start camera: ' + err });
       });

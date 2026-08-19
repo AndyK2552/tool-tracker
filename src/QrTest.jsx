@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
-import { safeStopScanner, safePauseScanner } from './qrScannerUtils';
+import { safeStopScanner, safePauseScanner, applyDefaultZoom } from './qrScannerUtils';
 import { getToolStatus } from './toolStatus';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
@@ -36,6 +36,7 @@ function QrTest({ techProfile }) {
         },
         () => {}
       )
+      .then(() => applyDefaultZoom(scanner))
       .catch((err) => {
         setError('Could not start camera: ' + err);
       });
