@@ -101,7 +101,7 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
       <PageHeader title="KYPD Tool Tracker" />
 
-      <div style={{ padding: '1.25rem' }}>
+      <div style={{ padding: '1.25rem', maxWidth: '500px', margin: '0 auto' }}>
         <button
           onClick={onHome}
           style={{ marginBottom: '1rem', padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: colors.gold, color: colors.navy, fontWeight: 'bold', cursor: 'pointer' }}
@@ -157,6 +157,9 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
               <div>
                 <span style={{ color: STATUS_DOT_COLORS[statusFilter], marginRight: '0.5rem' }}>●</span>
                 <strong style={{ color: colors.white }}>{tool.name}</strong>
+                {tool.beacon_alarm_active && (
+                  <span style={{ color: '#ff8080', fontWeight: 'bold', marginLeft: '0.5rem' }}>⚠ Near door</span>
+                )}
                 <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>
                   {tool.id}
                   {statusFilter === 'Checked Out' && (

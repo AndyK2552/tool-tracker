@@ -43,7 +43,7 @@ function AdminHome({ onNavigate, techName }) {
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
       <PageHeader title="KYPD Tool Tracker" />
 
-      <div style={{ padding: '1.25rem' }}>
+      <div style={{ padding: '1.25rem', maxWidth: '500px', margin: '0 auto' }}>
         <p style={{ fontSize: '18px', fontWeight: 500, color: colors.white, margin: '0 0 4px' }}>
         {getGreeting()}, {techName}
         </p>

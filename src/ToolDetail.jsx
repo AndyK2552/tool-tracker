@@ -533,7 +533,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
       <PageHeader title="KYPD Tool Tracker" />
 
-      <div style={{ padding: '1.25rem' }}>
+      <div style={{ padding: '1.25rem', maxWidth: '500px', margin: '0 auto' }}>
         <button onClick={isAdmin ? onHome : onBackToStatus} style={{ ...btnStyle, marginBottom: '1rem' }}>
           {isAdmin ? 'Home' : 'Back to Tool Status'}
         </button>

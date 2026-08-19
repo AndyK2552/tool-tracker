@@ -104,7 +104,7 @@ function QrTest({ techProfile }) {
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
       <PageHeader title="KYPD Tool Tracker" />
 
-      <div style={{ padding: '1.25rem' }}>
+      <div style={{ padding: '1.25rem', maxWidth: '500px', margin: '0 auto' }}>
         <h1 style={{ color: colors.white, fontSize: '20px' }}>Check-Out Tool</h1>
 
         <div style={{ display: tool ? 'none' : 'block' }}>
