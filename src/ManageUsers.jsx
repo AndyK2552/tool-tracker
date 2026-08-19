@@ -39,7 +39,7 @@ function ManageUsers({ onHome, onSelectUser }) {
       <div style={{ padding: '1.25rem' }}>
         <button onClick={onHome} style={{ ...btnStyle, marginBottom: '1rem' }}>Home</button>
 
-        <h1 style={{ color: colors.white, fontSize: '20px' }}>Manage Users</h1>
+        <h1 style={{ color: colors.white, fontSize: '20px' }}>Manage Users ({users.length})</h1>
 
         <div style={{ maxWidth: '450px' }}>
           {users.map((user) => (
