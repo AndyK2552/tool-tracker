@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import { safeStopScanner, safePauseScanner } from './qrScannerUtils';
+import { getToolStatus } from './toolStatus';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
 
@@ -67,7 +68,7 @@ function QrTest({ techProfile }) {
     const techWhoReturned = tool.checked_out_by;
     const { data, error } = await supabase
       .from('tools')
-      .update({ is_checked_out: false, checked_out_by: null, checked_out_at: null })
+      .update({ is_checked_out: false, checked_out_at: null, condition: 'Pending' })
       .eq('id', tool.id)
       .select()
       .single();
@@ -76,26 +77,7 @@ function QrTest({ techProfile }) {
       return;
     }
     await supabase.from('tool_history').insert({
-      tool_id: tool.id, tool_name: tool.name, action: 'returned', tech_name: techWhoReturned, timestamp: now,
-    });
-    setTool(data);
-  };
-
-  const handleToggleCondition = async () => {
-    const newCondition = tool.condition === 'Ready' ? 'Damaged' : 'Ready';
-    const { data, error } = await supabase
-      .from('tools')
-      .update({ condition: newCondition })
-      .eq('id', tool.id)
-      .select()
-      .single();
-    if (error) {
-      alert('Error updating condition: ' + error.message);
-      return;
-    }
-    await supabase.from('tool_history').insert({
-      tool_id: tool.id, tool_name: tool.name, action: 'condition_changed', tech_name: tool.checked_out_by,
-      timestamp: new Date().toISOString(), condition_change: newCondition,
+      tool_id: tool.id, tool_name: tool.name, action: 'returned', tech_name: techWhoReturned, timestamp: now, condition_change: 'Pending',
     });
     setTool(data);
   };
@@ -114,6 +96,8 @@ function QrTest({ techProfile }) {
 
   const cardStyle = { background: colors.navyLight, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '8px', padding: '1rem', marginTop: '1rem' };
   const btnStyle = { padding: '0.6rem 1rem', borderRadius: '6px', border: 'none', background: colors.gold, color: colors.navy, fontWeight: 'bold', cursor: 'pointer' };
+
+  const status = tool ? getToolStatus(tool) : null;
 
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
@@ -142,23 +126,33 @@ function QrTest({ techProfile }) {
           <div style={cardStyle}>
             <h2 style={{ color: colors.white, marginTop: 0 }}>{tool.name}</h2>
             <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>ID:</strong> {tool.id}</p>
-            <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Checked out:</strong> {tool.is_checked_out ? 'Yes' : 'No'}</p>
-            <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Checked out by:</strong> {tool.checked_out_by || '—'}</p>
-            <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Condition:</strong> {tool.condition}</p>
+            <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Status:</strong> {status}</p>
+            <p style={{ color: colors.textMuted }}>
+              <strong style={{ color: colors.white }}>{status === 'Checked Out' ? 'Checked out by:' : 'Last returned by:'}</strong> {tool.checked_out_by || '—'}
+            </p>
 
-            {!tool.is_checked_out ? (
+            {status === 'Available' && (
               <button onClick={handleCheckOut} style={btnStyle}>Check Out</button>
-            ) : (
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {(techProfile.is_admin || tool.checked_out_by === techProfile.name) ? (
-                  <button onClick={handleReturn} style={btnStyle}>Return</button>
-                ) : (
-                  <button disabled title={`Only ${tool.checked_out_by} or an admin can return this tool`} style={{ ...btnStyle, opacity: 0.5 }}>Return</button>
-                )}
-                <button onClick={handleToggleCondition} style={{ ...btnStyle, background: colors.navyLight, color: colors.white, border: `0.5px solid ${colors.navyBorder}` }}>
-                  Change Condition ({tool.condition === 'Ready' ? 'Mark Damaged' : 'Mark Ready'})
-                </button>
-              </div>
+            )}
+
+            {status === 'Checked Out' && (
+              (techProfile.is_admin || tool.checked_out_by === techProfile.name) ? (
+                <button onClick={handleReturn} style={btnStyle}>Return</button>
+              ) : (
+                <button disabled title={`Only ${tool.checked_out_by} or an admin can return this tool`} style={{ ...btnStyle, opacity: 0.5 }}>Return</button>
+              )
+            )}
+
+            {status === 'Pending' && (
+              <p style={{ color: colors.textMuted, fontStyle: 'italic' }}>
+                This tool is awaiting admin review before it can be checked out again.
+              </p>
+            )}
+
+            {status === 'Damaged' && (
+              <p style={{ color: '#ff8080', fontStyle: 'italic' }}>
+                This tool is marked damaged and can't be checked out.
+              </p>
             )}
 
             <div style={{ marginTop: '1rem' }}>

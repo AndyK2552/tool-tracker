@@ -3,6 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import { useCameraCapture } from './useCameraCapture';
 import { safeStopScanner, safePauseScanner } from './qrScannerUtils';
+import { getToolStatus } from './toolStatus';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
@@ -264,7 +265,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
 
     const { data, error } = await supabase
       .from('tools')
-      .update({ is_checked_out: false, checked_out_by: null, checked_out_at: null })
+      .update({ is_checked_out: false, checked_out_at: null, condition: 'Pending' })
       .eq('id', tool.id)
       .select()
       .single();
@@ -275,11 +276,74 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     }
 
     await supabase.from('tool_history').insert({
-      tool_id: tool.id, tool_name: tool.name, action: 'returned', tech_name: techWhoReturned, timestamp: now,
+      tool_id: tool.id, tool_name: tool.name, action: 'returned', tech_name: techWhoReturned, timestamp: now, condition_change: 'Pending',
     });
 
     setTool(data);
-    setMessage({ type: 'success', text: 'Tool returned.' });
+    setMessage({ type: 'success', text: 'Tool returned — pending admin review.' });
+  };
+
+  const handleAcceptReturn = async () => {
+    const { data, error } = await supabase
+      .from('tools')
+      .update({ condition: 'Ready', checked_out_by: null })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+
+    await supabase.from('tool_history').insert({
+      tool_id: tool.id, tool_name: tool.name, action: 'return_accepted', tech_name: techProfile.name, timestamp: new Date().toISOString(), condition_change: 'Ready',
+    });
+
+    setTool(data);
+    setMessage({ type: 'success', text: 'Return accepted — tool is now available.' });
+  };
+
+  const handleMarkDamaged = async () => {
+    const { data, error } = await supabase
+      .from('tools')
+      .update({ condition: 'Damaged', checked_out_by: null })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+
+    await supabase.from('tool_history').insert({
+      tool_id: tool.id, tool_name: tool.name, action: 'marked_damaged', tech_name: techProfile.name, timestamp: new Date().toISOString(), condition_change: 'Damaged',
+    });
+
+    setTool(data);
+    setMessage({ type: 'success', text: 'Tool marked damaged.' });
+  };
+
+  const handleMarkRepaired = async () => {
+    const { data, error } = await supabase
+      .from('tools')
+      .update({ condition: 'Ready' })
+      .eq('id', tool.id)
+      .select()
+      .single();
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+
+    await supabase.from('tool_history').insert({
+      tool_id: tool.id, tool_name: tool.name, action: 'marked_repaired', tech_name: techProfile.name, timestamp: new Date().toISOString(), condition_change: 'Ready',
+    });
+
+    setTool(data);
+    setMessage({ type: 'success', text: 'Tool marked available again.' });
   };
 
   const handleCheckOut = async (techName) => {
@@ -322,7 +386,9 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     </div>
   );
 
-  const canReturn = isAdmin || tool.checked_out_by === techProfile?.name;
+  const status = getToolStatus(tool);
+  const isHolder = tool.is_checked_out && tool.checked_out_by === techProfile?.name;
+  const canManage = isAdmin || isHolder;
 
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
@@ -347,37 +413,59 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Serial Number:</strong> {tool.id}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>QR Code:</strong> {tool.qr_code || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Location:</strong> {tool.location || '—'}</p>
-          <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Checked out:</strong> {tool.is_checked_out ? 'Yes' : 'No'}</p>
-          <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Checked out by:</strong> {tool.checked_out_by || '—'}</p>
-          <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Condition:</strong> {tool.condition}</p>
+          <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Status:</strong> {status}</p>
+          <p style={{ color: colors.textMuted }}>
+            <strong style={{ color: colors.white }}>{status === 'Checked Out' ? 'Checked out by:' : 'Last returned by:'}</strong> {tool.checked_out_by || '—'}
+          </p>
 
-          {tool.is_checked_out ? (
-            canReturn ? (
+          {status === 'Checked Out' ? (
+            canManage ? (
               <button onClick={handleReturn} style={btnStyle}>Return</button>
             ) : (
               <button disabled title={`Only ${tool.checked_out_by} or an admin can return this tool`} style={{ ...btnStyle, opacity: 0.5 }}>
                 Return
               </button>
             )
-          ) : isAdmin ? (
-            <div style={{ marginTop: '0.5rem' }}>
-              <select
-                value={selectedTech}
-                onChange={(e) => setSelectedTech(e.target.value)}
-                style={{ padding: '0.5rem', marginRight: '0.5rem', borderRadius: '6px', border: 'none' }}
-              >
-                <option value="">Select a tech...</option>
-                {techs.map((t) => (
-                  <option key={t.name} value={t.name}>{t.name}</option>
-                ))}
-              </select>
-              <button onClick={() => handleCheckOut(selectedTech)} style={{ ...btnStyle, marginTop: 0 }}>Check Out</button>
-            </div>
+          ) : status === 'Available' ? (
+            isAdmin ? (
+              <div style={{ marginTop: '0.5rem' }}>
+                <select
+                  value={selectedTech}
+                  onChange={(e) => setSelectedTech(e.target.value)}
+                  style={{ padding: '0.5rem', marginRight: '0.5rem', borderRadius: '6px', border: 'none' }}
+                >
+                  <option value="">Select a tech...</option>
+                  {techs.map((t) => (
+                    <option key={t.name} value={t.name}>{t.name}</option>
+                  ))}
+                </select>
+                <button onClick={() => handleCheckOut(selectedTech)} style={{ ...btnStyle, marginTop: 0 }}>Check Out</button>
+              </div>
+            ) : (
+              <button onClick={() => handleCheckOut(techProfile.name)} style={btnStyle}>Check Out</button>
+            )
+          ) : status === 'Pending' ? (
+            isAdmin ? (
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button onClick={handleAcceptReturn} style={btnStyle}>Accept Return</button>
+                <button onClick={handleMarkDamaged} style={{ ...secondaryBtnStyle, color: '#ff8080' }}>Mark Damaged</button>
+              </div>
+            ) : (
+              <p style={{ color: colors.textMuted, fontStyle: 'italic' }}>
+                This tool is awaiting admin review before it can be checked out again.
+              </p>
+            )
           ) : (
-            <button onClick={() => handleCheckOut(techProfile.name)} style={btnStyle}>Check Out</button>
+            isAdmin ? (
+              <button onClick={handleMarkRepaired} style={btnStyle}>Mark Repaired / Available</button>
+            ) : (
+              <p style={{ color: '#ff8080', fontStyle: 'italic' }}>
+                This tool is marked damaged and can't be checked out.
+              </p>
+            )
           )}
 
-          {canReturn && (
+          {canManage && (
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
               {isAdmin && (
                 <button onClick={handleStartAssignQr} style={{ ...(assigningQr ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
@@ -428,7 +516,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           )}
           {photoCameraInput}
 
-          {canReturn && assigningLocation && (
+          {canManage && assigningLocation && (
             <div ref={locationPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
               <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
                 Location

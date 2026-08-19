@@ -174,8 +174,7 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
             <div>
               <strong style={{ color: colors.white }}>{tool.name}</strong>
               <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>
-                {tool.id}
-                {tool.condition === 'Damaged' ? ' — ⚠️ Damaged' : ''}<br />
+                {tool.id}<br />
                 Duration: {formatDuration(tool.checked_out_at)}
               </p>
             </div>
