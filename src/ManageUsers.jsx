@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
-function ManageUsers({ onHome }) {
+function ManageUsers({ onHome, onSelectUser }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -56,7 +56,11 @@ function ManageUsers({ onHome }) {
   const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '0.5rem', borderRadius: '6px', border: 'none', marginBottom: '0.5rem' };
   const labelStyle = { display: 'block', color: colors.white, fontSize: '13px', marginBottom: '0.25rem' };
 
-  if (loading) return <p style={{ color: colors.white, padding: '1rem' }}>Loading...</p>;
+  if (loading) return (
+    <div style={{ background: colors.navy, minHeight: '100vh', padding: '1.25rem' }}>
+      <p style={{ color: colors.white }}>Loading...</p>
+    </div>
+  );
 
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
@@ -75,7 +79,11 @@ function ManageUsers({ onHome }) {
 
         <div style={{ maxWidth: '450px' }}>
           {users.map((user) => (
-            <div key={user.id} style={cardStyle}>
+            <div
+              key={user.id}
+              onClick={editingId === user.id ? undefined : () => onSelectUser(user.id)}
+              style={{ ...cardStyle, cursor: editingId === user.id ? 'default' : 'pointer' }}
+            >
               {editingId === user.id ? (
                 <>
                   <label style={labelStyle}>Name</label>
@@ -101,7 +109,7 @@ function ManageUsers({ onHome }) {
                   <p style={{ color: colors.textMuted, fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
                     {user.is_admin ? 'Admin' : 'Tech'}
                   </p>
-                  <button onClick={() => startEdit(user)} style={secondaryBtnStyle}>Edit</button>
+                  <button onClick={(e) => { e.stopPropagation(); startEdit(user); }} style={secondaryBtnStyle}>Edit</button>
                 </>
               )}
             </div>

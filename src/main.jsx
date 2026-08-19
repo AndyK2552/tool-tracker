@@ -11,6 +11,7 @@ import AdminHome from './AdminHome.jsx'
 import CheckoutHistory from './CheckoutHistory.jsx'
 import ToolDetail from './ToolDetail.jsx'
 import ManageUsers from './ManageUsers.jsx'
+import UserDetail from './UserDetail.jsx'
 import { colors } from './theme'
 import { installGlobalCrashLogging, getLastCrash, clearLastCrash, logCrash } from './crashLog.js'
 
@@ -73,6 +74,7 @@ function Root() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState(() => localStorage.getItem('view') || 'scanner')
   const [selectedToolId, setSelectedToolId] = useState(() => localStorage.getItem('selectedToolId') || null)
+  const [selectedUserId, setSelectedUserId] = useState(() => localStorage.getItem('selectedUserId') || null)
   const hasSetInitialView = useRef(localStorage.getItem('view') !== null)
   const isPopStateRef = useRef(false)
   const hasInitializedHistoryRef = useRef(false)
@@ -84,17 +86,18 @@ function Root() {
     }
     if (!hasInitializedHistoryRef.current) {
       hasInitializedHistoryRef.current = true
-      window.history.replaceState({ view, selectedToolId }, '')
+      window.history.replaceState({ view, selectedToolId, selectedUserId }, '')
       return
     }
-    window.history.pushState({ view, selectedToolId }, '')
-  }, [view, selectedToolId])
+    window.history.pushState({ view, selectedToolId, selectedUserId }, '')
+  }, [view, selectedToolId, selectedUserId])
 
   useEffect(() => {
     const handlePopState = (event) => {
       isPopStateRef.current = true
       setView(event.state?.view || 'scanner')
       setSelectedToolId(event.state?.selectedToolId || null)
+      setSelectedUserId(event.state?.selectedUserId || null)
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
@@ -165,6 +168,12 @@ function Root() {
     }
   }, [selectedToolId])
 
+  useEffect(() => {
+    if (selectedUserId) {
+      localStorage.setItem('selectedUserId', selectedUserId)
+    }
+  }, [selectedUserId])
+
   if (loading) return (
     <div style={{ background: colors.navy, minHeight: '100vh', padding: '1.25rem' }}>
       <p style={{ color: colors.white }}>Loading...</p>
@@ -223,8 +232,24 @@ function Root() {
     return <AdminPage onHome={() => setView('home')} onSelectTool={selectTool} />
   }
 
+  const selectUser = (id) => {
+    setSelectedUserId(id)
+    setView('userDetail')
+  }
+
   if (view === 'users') {
-    return <ManageUsers onHome={() => setView('home')} />
+    return <ManageUsers onHome={() => setView('home')} onSelectUser={selectUser} />
+  }
+
+  if (view === 'userDetail') {
+    return (
+      <UserDetail
+        userId={selectedUserId}
+        onHome={() => setView('home')}
+        onBackToUsers={() => setView('users')}
+        onSelectTool={selectTool}
+      />
+    )
   }
 
   return (
