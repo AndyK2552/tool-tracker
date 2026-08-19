@@ -454,7 +454,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           {isAdmin ? 'Home' : 'Back to Tool Status'}
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
           {isAdmin && (
             <button
               onClick={handleStartEditName}
