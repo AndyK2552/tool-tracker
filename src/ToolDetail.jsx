@@ -454,7 +454,17 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           {isAdmin ? 'Home' : 'Back to Tool Status'}
         </button>
 
-        <h1 style={{ color: colors.white, fontSize: '20px' }}>{tool.name}</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {isAdmin && (
+            <button
+              onClick={handleStartEditName}
+              style={{ ...(editingName ? btnStyle : secondaryBtnStyle), padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+            >
+              Edit
+            </button>
+          )}
+          <h1 style={{ color: colors.white, fontSize: '20px', margin: 0 }}>{tool.name}</h1>
+        </div>
 
         {tool.image_url && (
           <img
@@ -522,11 +532,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
 
           {canManage && (
             <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {isAdmin && (
-                <button onClick={handleStartEditName} style={{ ...(editingName ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
-                  Edit Name
-                </button>
-              )}
               {isAdmin && (
                 <button onClick={handleStartAssignQr} style={{ ...(assigningQr ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                   Assign QR Code
