@@ -215,7 +215,7 @@ function Root() {
   }
 
   if (view === 'home') {
-    return <AdminHome onNavigate={(v) => setView(v)} techName={profile.name} />
+    return <AdminHome onNavigate={(v) => setView(v)} techName={profile.name} truckNumber={profile.truck_number} />
   }
 
   const selectTool = (id) => {

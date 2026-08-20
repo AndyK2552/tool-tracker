@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
+import { formatTechName } from './techDisplay';
 import PageHeader from './PageHeader';
 import { colors, btnStyle } from './theme';
 
@@ -44,7 +45,7 @@ function ManageUsers({ onHome, onSelectUser }) {
         <div style={{ maxWidth: '450px' }}>
           {users.map((user) => (
             <div key={user.id} onClick={() => onSelectUser(user.id)} style={cardStyle}>
-              <p style={{ color: colors.white, fontWeight: 'bold', margin: '0 0 4px' }}>{user.name}</p>
+              <p style={{ color: colors.white, fontWeight: 'bold', margin: '0 0 4px' }}>{formatTechName(user.name, user.truck_number)}</p>
               <p style={{ color: colors.textMuted, fontSize: '0.85rem', margin: '0 0 4px' }}>{user.email}</p>
               <p style={{ color: colors.textMuted, fontSize: '0.85rem', margin: 0 }}>
                 {user.is_admin ? 'Admin' : 'Tech'}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
+import { formatTechName } from './techDisplay';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
@@ -29,6 +30,7 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editTruckNumber, setEditTruckNumber] = useState('');
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -56,6 +58,7 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
   const startEdit = () => {
     setEditName(user.name || '');
     setEditEmail(user.email || '');
+    setEditTruckNumber(user.truck_number || '');
     setEditIsAdmin(!!user.is_admin);
     setMessage(null);
     setEditing(true);
@@ -68,7 +71,7 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
   const saveEdit = async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .update({ name: editName.trim(), email: editEmail.trim(), is_admin: editIsAdmin })
+      .update({ name: editName.trim(), email: editEmail.trim(), truck_number: editTruckNumber.trim(), is_admin: editIsAdmin })
       .eq('id', userId)
       .select()
       .single();
@@ -142,6 +145,9 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
               <label style={labelStyle}>Email</label>
               <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} style={inputStyle} />
 
+              <label style={labelStyle}>Truck Number</label>
+              <input type="text" value={editTruckNumber} onChange={(e) => setEditTruckNumber(e.target.value)} style={inputStyle} />
+
               <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.75rem' }}>
                 <input type="checkbox" checked={editIsAdmin} onChange={(e) => setEditIsAdmin(e.target.checked)} />
                 Admin
@@ -154,7 +160,7 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
             </>
           ) : (
             <>
-              <h1 style={{ color: colors.white, fontSize: '20px', margin: '0 0 0.5rem' }}>{user.name}</h1>
+              <h1 style={{ color: colors.white, fontSize: '20px', margin: '0 0 0.5rem' }}>{formatTechName(user.name, user.truck_number)}</h1>
               <p style={{ color: colors.textMuted, margin: '0 0 4px' }}>{user.email}</p>
               <p style={{ color: colors.textMuted, margin: '0 0 0.75rem' }}>{user.is_admin ? 'Admin' : 'Tech'}</p>
               <button onClick={startEdit} style={secondaryBtnStyle}>Edit</button>

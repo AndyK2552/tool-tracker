@@ -5,6 +5,7 @@ import PageHeader from './PageHeader';
 
 function Registration({ userId, email, onComplete }) {
   const [name, setName] = useState('');
+  const [truckNumber, setTruckNumber] = useState('');
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -19,6 +20,7 @@ function Registration({ userId, email, onComplete }) {
         id: userId,
         email: email,
         name: name.trim(),
+        truck_number: truckNumber.trim(),
         is_admin: false,
       });
 
@@ -46,6 +48,22 @@ function Registration({ userId, email, onComplete }) {
             placeholder="Full name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            required
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: '0.75rem',
+              borderRadius: '6px',
+              border: 'none',
+              fontSize: '15px',
+              marginBottom: '1rem',
+            }}
+          />
+          <input
+            type="text"
+            placeholder="Truck number"
+            value={truckNumber}
+            onChange={(e) => setTruckNumber(e.target.value)}
             required
             style={{
               width: '100%',

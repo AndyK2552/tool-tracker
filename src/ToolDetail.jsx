@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { useCameraCapture } from './useCameraCapture';
 import { safeStopScanner, safePauseScanner, applyDefaultZoom } from './qrScannerUtils';
 import { getToolStatus } from './toolStatus';
+import { formatTechName } from './techDisplay';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
@@ -91,8 +92,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   };
 
   const fetchTechs = async () => {
-    if (!isAdmin) return;
-    const { data } = await supabase.from('profiles').select('name').order('name');
+    const { data } = await supabase.from('profiles').select('name, truck_number').order('name');
     setTechs(data || []);
   };
 
@@ -572,7 +572,10 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
             </p>
           )}
           <p style={{ color: colors.textMuted }}>
-            <strong style={{ color: colors.white }}>{status === 'Checked Out' ? 'Checked out by:' : 'Last returned by:'}</strong> {tool.checked_out_by || '—'}
+            <strong style={{ color: colors.white }}>{status === 'Checked Out' ? 'Checked out by:' : 'Last returned by:'}</strong>{' '}
+            {tool.checked_out_by
+              ? formatTechName(tool.checked_out_by, techs.find((t) => t.name === tool.checked_out_by)?.truck_number)
+              : '—'}
           </p>
 
           {status === 'Checked Out' ? (
@@ -593,7 +596,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
                 >
                   <option value="">Select a tech...</option>
                   {techs.map((t) => (
-                    <option key={t.name} value={t.name}>{t.name}</option>
+                    <option key={t.name} value={t.name}>{formatTechName(t.name, t.truck_number)}</option>
                   ))}
                 </select>
                 <button onClick={() => handleCheckOut(selectedTech)} style={{ ...btnStyle, marginTop: 0 }}>Check Out</button>

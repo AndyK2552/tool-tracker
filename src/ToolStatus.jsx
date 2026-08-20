@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { getToolStatus, STATUS_DOT_COLORS } from './toolStatus';
+import { formatTechName, fetchTruckNumberByName } from './techDisplay';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
 
@@ -27,6 +28,7 @@ const STATUS_TABS = ['Available', 'Checked Out', 'Pending', 'Damaged'];
 
 function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
   const [tools, setTools] = useState([]);
+  const [truckNumbers, setTruckNumbers] = useState({});
   const [loading, setLoading] = useState(true);
   const [locationFilter, setLocationFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('Available');
@@ -47,6 +49,10 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
     fetchTools();
     const interval = setInterval(fetchTools, 15000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    fetchTruckNumberByName().then(setTruckNumbers);
   }, []);
 
   const locationFilteredTools = tools.filter((t) => {
@@ -165,20 +171,20 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
                   {statusFilter === 'Checked Out' && (
                     <>
                       <br />
-                      Checked out by: {tool.checked_out_by}<br />
+                      Checked out by: {formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by])}<br />
                       Duration: {formatDuration(tool.checked_out_at)}
                     </>
                   )}
                   {statusFilter === 'Pending' && (
                     <>
                       <br />
-                      Returned by: {tool.checked_out_by || '—'}
+                      Returned by: {tool.checked_out_by ? formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by]) : '—'}
                     </>
                   )}
                   {statusFilter === 'Damaged' && (
                     <>
                       <br />
-                      Last held by: {tool.checked_out_by || '—'}
+                      Last held by: {tool.checked_out_by ? formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by]) : '—'}
                     </>
                   )}
                 </p>

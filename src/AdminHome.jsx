@@ -1,4 +1,5 @@
 import { Camera, ClipboardList, Plus, Clock, Users } from 'lucide-react';
+import { formatTechName } from './techDisplay';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
 
@@ -17,7 +18,7 @@ const getGreeting = () => {
   return 'Good evening';
 };
 
-function AdminHome({ onNavigate, techName }) {
+function AdminHome({ onNavigate, techName, truckNumber }) {
   const cardStyle = {
     background: colors.navyLight,
     border: `0.5px solid ${colors.navyBorder}`,
@@ -45,7 +46,7 @@ function AdminHome({ onNavigate, techName }) {
 
       <div style={{ padding: '1.25rem', maxWidth: '500px', margin: '0 auto' }}>
         <p style={{ fontSize: '18px', fontWeight: 500, color: colors.white, margin: '0 0 4px' }}>
-        {getGreeting()}, {techName}
+        {getGreeting()}, {formatTechName(techName, truckNumber)}
         </p>
         <p style={{ fontSize: '20px', fontWeight: 'bold', color: colors.gold, margin: '0 0 1.25rem' }}>
           Admin Home
