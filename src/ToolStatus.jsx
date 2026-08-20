@@ -128,7 +128,7 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
           )}
           <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>
             {tool.id}
-            {statusFilter === 'All' && <> — {toolStatus}</>}
+            {(statusFilter === 'All' || truckView) && <> — {toolStatus}</>}
             {showTechLine && toolStatus === 'Checked Out' && (
               <>
                 <br />
