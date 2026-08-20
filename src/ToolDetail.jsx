@@ -7,14 +7,7 @@ import { getToolStatus } from './toolStatus';
 import { formatTechName } from './techDisplay';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
-
-// Strips any separators and re-inserts colons every 2 hex digits, so a raw
-// QR-code string (or a pasted MAC with dashes/spaces/no separators) becomes
-// the AA:BB:CC:DD:EE:FF form the app and firmware both expect.
-const formatMacInput = (raw) => {
-  const hex = raw.replace(/[^0-9a-fA-F]/g, '').toUpperCase().slice(0, 12);
-  return hex.match(/.{1,2}/g)?.join(':') || hex;
-};
+import { formatMacInput, MAC_PATTERN } from './macFormat';
 
 function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSelectTool }) {
   const [tool, setTool] = useState(null);
@@ -286,8 +279,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
 
   const handleSubmitBeacon = async () => {
     const trimmedMac = newBeaconMac.trim();
-    const macPattern = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
-    if (trimmedMac && !macPattern.test(trimmedMac)) {
+    if (trimmedMac && !MAC_PATTERN.test(trimmedMac)) {
       setMessage({ type: 'error', text: 'Beacon MAC must look like AA:BB:CC:DD:EE:FF.' });
       return;
     }
