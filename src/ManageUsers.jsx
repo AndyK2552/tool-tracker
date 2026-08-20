@@ -46,7 +46,6 @@ function ManageUsers({ onHome, onSelectUser }) {
           {users.map((user) => (
             <div key={user.id} onClick={() => onSelectUser(user.id)} style={cardStyle}>
               <p style={{ color: colors.white, fontWeight: 'bold', margin: '0 0 4px' }}>{formatTechName(user.name, user.truck_number)}</p>
-              <p style={{ color: colors.textMuted, fontSize: '0.85rem', margin: '0 0 4px' }}>{user.email}</p>
               <p style={{ color: colors.textMuted, fontSize: '0.85rem', margin: 0 }}>
                 {user.is_admin ? 'Admin' : 'Tech'}
               </p>
