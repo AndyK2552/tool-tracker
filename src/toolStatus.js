@@ -11,7 +11,7 @@ export const getToolStatus = (tool) => {
 
 export const STATUS_DOT_COLORS = {
   Available: '#5FCF7A',
-  'Checked Out': '#6FA8E0',
+  'Checked Out': '#E0645A',
   Pending: '#E8B923',
-  Damaged: '#E0645A',
+  Damaged: '#000000',
 };
