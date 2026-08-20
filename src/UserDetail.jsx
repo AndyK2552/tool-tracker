@@ -33,6 +33,7 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
   const [editTruckNumber, setEditTruckNumber] = useState('');
   const [editIsAdmin, setEditIsAdmin] = useState(false);
   const [message, setMessage] = useState(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const fetchData = async () => {
     const { data: userData } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -84,6 +85,16 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
     setUser(data);
     setEditing(false);
     setMessage({ type: 'success', text: 'User updated.' });
+  };
+
+  const confirmDeleteUser = async () => {
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      setConfirmingDelete(false);
+    } else {
+      onBackToUsers();
+    }
   };
 
   const cardStyle = {
@@ -163,7 +174,10 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
               <h1 style={{ color: colors.white, fontSize: '20px', margin: '0 0 0.5rem' }}>{formatTechName(user.name, user.truck_number)}</h1>
               <p style={{ color: colors.textMuted, margin: '0 0 4px' }}>{user.email}</p>
               <p style={{ color: colors.textMuted, margin: '0 0 0.75rem' }}>{user.is_admin ? 'Admin' : 'Tech'}</p>
-              <button onClick={startEdit} style={secondaryBtnStyle}>Edit</button>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button onClick={startEdit} style={secondaryBtnStyle}>Edit</button>
+                <button onClick={() => setConfirmingDelete(true)} style={{ ...secondaryBtnStyle, color: '#ff8080' }}>Delete User</button>
+              </div>
             </>
           )}
         </div>
@@ -187,6 +201,31 @@ function UserDetail({ userId, onHome, onBackToUsers, onSelectTool }) {
           </div>
         ))}
       </div>
+
+      {confirmingDelete && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.25rem', zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              background: colors.navy, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '12px',
+              padding: '1.5rem', maxWidth: '360px', width: '100%',
+            }}
+          >
+            <h2 style={{ color: colors.white, fontSize: '18px', margin: '0 0 0.75rem' }}>Delete User</h2>
+            <p style={{ color: colors.textMuted, margin: 0 }}>
+              Are you sure you want to delete "{user.name}"? This removes their access and cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button onClick={() => setConfirmingDelete(false)} style={secondaryBtnStyle}>Cancel</button>
+              <button onClick={confirmDeleteUser} style={{ ...btnStyle, background: '#E0645A', color: colors.white }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

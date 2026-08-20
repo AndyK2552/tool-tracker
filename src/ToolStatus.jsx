@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { getToolStatus, STATUS_DOT_COLORS } from './toolStatus';
 import { formatTechName, fetchTruckNumberByName } from './techDisplay';
@@ -24,14 +25,15 @@ const formatDuration = (checkedOutAt) => {
   return parts.join(' ');
 };
 
-const STATUS_TABS = ['Available', 'Checked Out', 'Pending', 'Damaged'];
+const STATUS_TABS = ['All', 'Available', 'Checked Out', 'Pending', 'Damaged'];
 
 function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
   const [tools, setTools] = useState([]);
   const [truckNumbers, setTruckNumbers] = useState({});
   const [loading, setLoading] = useState(true);
   const [locationFilter, setLocationFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState('Available');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [expandedTechs, setExpandedTechs] = useState({});
 
   const fetchTools = async () => {
     const { data, error } = await supabase
@@ -72,6 +74,7 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
     grouped[getToolStatus(tool)].push(tool);
   }
   grouped['Checked Out'].sort((a, b) => new Date(a.checked_out_at) - new Date(b.checked_out_at));
+  grouped['All'] = locationFilteredTools;
 
   const cardStyle = {
     background: colors.navyLight,
@@ -101,7 +104,79 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
   </div>
 );
 
+  const truckView = locationFilter === 'Truck';
   const visibleTools = grouped[statusFilter];
+
+  const toggleTech = (techKey) => {
+    setExpandedTechs((prev) => ({ ...prev, [techKey]: !prev[techKey] }));
+  };
+
+  const renderToolCard = (tool, { showTechLine = true } = {}) => {
+    const toolStatus = getToolStatus(tool);
+    return (
+      <div key={tool.id} onClick={() => onSelectTool(tool.id)} style={{ ...cardStyle, display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+        {tool.image_url ? (
+          <img src={tool.image_url} alt={tool.name} style={thumbnailStyle} />
+        ) : (
+          <div style={thumbnailPlaceholderStyle} />
+        )}
+        <div>
+          <span style={{ color: STATUS_DOT_COLORS[toolStatus], marginRight: '0.5rem' }}>●</span>
+          <strong style={{ color: colors.white }}>{tool.name}</strong>
+          {tool.beacon_alarm_active && (
+            <span style={{ color: '#ff8080', fontWeight: 'bold', marginLeft: '0.5rem' }}>⚠ Near door</span>
+          )}
+          <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>
+            {tool.id}
+            {statusFilter === 'All' && <> — {toolStatus}</>}
+            {showTechLine && toolStatus === 'Checked Out' && (
+              <>
+                <br />
+                Checked out by: {formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by])}<br />
+                Duration: {formatDuration(tool.checked_out_at)}
+              </>
+            )}
+            {showTechLine && toolStatus === 'Pending' && (
+              <>
+                <br />
+                Returned by: {tool.checked_out_by ? formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by]) : '—'}
+              </>
+            )}
+            {showTechLine && toolStatus === 'Damaged' && (
+              <>
+                <br />
+                Last held by: {tool.checked_out_by ? formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by]) : '—'}
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  // Truck view groups by tech instead of by status — tools only record a
+  // generic "Truck" location, not which specific truck, so the tech
+  // currently holding a tool (via checked_out_by) is the only real link to
+  // a truck number. Tools with location=Truck but nobody currently holding
+  // them (Available/Pending/Damaged) can't be grouped by tech, so they're
+  // listed separately as Unassigned.
+  const truckTools = tools.filter((t) => t.location === 'Truck');
+  const techGroups = {};
+  for (const tool of truckTools) {
+    if (!tool.is_checked_out) continue;
+    const tech = tool.checked_out_by || 'Unassigned';
+    if (!techGroups[tech]) techGroups[tech] = [];
+    techGroups[tech].push(tool);
+  }
+  const sortedTechNames = Object.keys(techGroups).sort((a, b) => {
+    const na = parseInt(truckNumbers[a], 10);
+    const nb = parseInt(truckNumbers[b], 10);
+    if (isNaN(na) && isNaN(nb)) return a.localeCompare(b);
+    if (isNaN(na)) return 1;
+    if (isNaN(nb)) return -1;
+    return na - nb;
+  });
+  const unassignedTruckTools = truckTools.filter((t) => !t.is_checked_out);
 
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
@@ -134,63 +209,73 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-          {STATUS_TABS.map((option) => (
-            <button
-              key={option}
-              onClick={() => setStatusFilter(option)}
-              style={{
-                padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold',
-                border: `0.5px solid ${colors.navyBorder}`,
-                background: statusFilter === option ? colors.gold : colors.navyLight,
-                color: statusFilter === option ? colors.navy : colors.white,
-              }}
-            >
-              {option} ({grouped[option].length})
-            </button>
-          ))}
-        </div>
+        {!truckView && (
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+            {STATUS_TABS.map((option) => (
+              <button
+                key={option}
+                onClick={() => setStatusFilter(option)}
+                style={{
+                  padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold',
+                  border: `0.5px solid ${colors.navyBorder}`,
+                  background: statusFilter === option ? colors.gold : colors.navyLight,
+                  color: statusFilter === option ? colors.navy : colors.white,
+                }}
+              >
+                {option} ({grouped[option].length})
+              </button>
+            ))}
+          </div>
+        )}
 
         <div style={{ maxWidth: '450px' }}>
-          {visibleTools.length === 0 && <p style={{ color: colors.textMuted }}>No tools currently {statusFilter.toLowerCase()}.</p>}
-          {visibleTools.map((tool) => (
-            <div key={tool.id} onClick={() => onSelectTool(tool.id)} style={{ ...cardStyle, display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-              {tool.image_url ? (
-                <img src={tool.image_url} alt={tool.name} style={thumbnailStyle} />
-              ) : (
-                <div style={thumbnailPlaceholderStyle} />
+          {truckView ? (
+            <>
+              {sortedTechNames.length === 0 && unassignedTruckTools.length === 0 && (
+                <p style={{ color: colors.textMuted }}>No tools currently on trucks.</p>
               )}
-              <div>
-                <span style={{ color: STATUS_DOT_COLORS[statusFilter], marginRight: '0.5rem' }}>●</span>
-                <strong style={{ color: colors.white }}>{tool.name}</strong>
-                {tool.beacon_alarm_active && (
-                  <span style={{ color: '#ff8080', fontWeight: 'bold', marginLeft: '0.5rem' }}>⚠ Near door</span>
-                )}
-                <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>
-                  {tool.id}
-                  {statusFilter === 'Checked Out' && (
-                    <>
-                      <br />
-                      Checked out by: {formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by])}<br />
-                      Duration: {formatDuration(tool.checked_out_at)}
-                    </>
-                  )}
-                  {statusFilter === 'Pending' && (
-                    <>
-                      <br />
-                      Returned by: {tool.checked_out_by ? formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by]) : '—'}
-                    </>
-                  )}
-                  {statusFilter === 'Damaged' && (
-                    <>
-                      <br />
-                      Last held by: {tool.checked_out_by ? formatTechName(tool.checked_out_by, truckNumbers[tool.checked_out_by]) : '—'}
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
-          ))}
+              {sortedTechNames.map((tech) => {
+                const techTools = techGroups[tech];
+                const isExpanded = !!expandedTechs[tech];
+                return (
+                  <div key={tech} style={{ marginBottom: '0.5rem' }}>
+                    <div
+                      onClick={() => toggleTech(tech)}
+                      style={{ ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                    >
+                      <strong style={{ color: colors.white }}>
+                        {formatTechName(tech, truckNumbers[tech])} ({techTools.length})
+                      </strong>
+                      <ChevronDown
+                        size={18}
+                        color={colors.textMuted}
+                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}
+                      />
+                    </div>
+                    {isExpanded && (
+                      <div style={{ paddingLeft: '0.75rem' }}>
+                        {techTools.map((tool) => renderToolCard(tool, { showTechLine: false }))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {unassignedTruckTools.length > 0 && (
+                <>
+                  <h2 style={{ color: colors.white, fontSize: '16px', marginTop: '1.5rem' }}>
+                    Unassigned ({unassignedTruckTools.length})
+                  </h2>
+                  {unassignedTruckTools.map((tool) => renderToolCard(tool))}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {visibleTools.length === 0 && <p style={{ color: colors.textMuted }}>No tools currently {statusFilter === 'All' ? 'match this filter' : statusFilter.toLowerCase()}.</p>}
+              {visibleTools.map((tool) => renderToolCard(tool))}
+            </>
+          )}
         </div>
       </div>
     </div>
