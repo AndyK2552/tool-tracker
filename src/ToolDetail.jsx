@@ -8,6 +8,14 @@ import { formatTechName } from './techDisplay';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 
+// Strips any separators and re-inserts colons every 2 hex digits, so a raw
+// QR-code string (or a pasted MAC with dashes/spaces/no separators) becomes
+// the AA:BB:CC:DD:EE:FF form the app and firmware both expect.
+const formatMacInput = (raw) => {
+  const hex = raw.replace(/[^0-9a-fA-F]/g, '').toUpperCase().slice(0, 12);
+  return hex.match(/.{1,2}/g)?.join(':') || hex;
+};
+
 function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSelectTool }) {
   const [tool, setTool] = useState(null);
   const [techs, setTechs] = useState([]);
@@ -21,6 +29,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [assigningBeacon, setAssigningBeacon] = useState(false);
   const [newBeaconMac, setNewBeaconMac] = useState('');
   const [newBeaconThreshold, setNewBeaconThreshold] = useState('');
+  const [scanningBeaconMac, setScanningBeaconMac] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
@@ -57,6 +66,33 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   useEffect(() => {
     if (assigningBeacon) beaconPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [assigningBeacon]);
+
+  useEffect(() => {
+    if (!scanningBeaconMac) return;
+
+    const scanner = new Html5Qrcode('beacon-qr-reader');
+    scannerRef.current = scanner;
+
+    scanner
+      .start(
+        { facingMode: 'environment' },
+        { fps: 10 },
+        (decodedText) => {
+          setNewBeaconMac(formatMacInput(decodedText));
+          setScanningBeaconMac(false);
+        },
+        () => {}
+      )
+      .then(() => applyDefaultZoom(scanner))
+      .catch((err) => {
+        setMessage({ type: 'error', text: 'Could not start camera: ' + err });
+        setScanningBeaconMac(false);
+      });
+
+    return () => {
+      safeStopScanner(scanner);
+    };
+  }, [scanningBeaconMac]);
 
   useEffect(() => {
     if (!tool?.id) return;
@@ -131,6 +167,8 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setScannedQr('');
     setMessage(null);
     setAssigningLocation(false);
+    setAssigningBeacon(false);
+    setScanningBeaconMac(false);
     setUpdatingPhoto(false);
     setEditingName(false);
     setAssigningQr(true);
@@ -198,6 +236,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setUpdatingPhoto(false);
     setEditingName(false);
     setAssigningBeacon(false);
+    setScanningBeaconMac(false);
     setAssigningLocation(true);
   };
 
@@ -240,6 +279,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
 
   const handleCancelAssignBeacon = () => {
     setAssigningBeacon(false);
+    setScanningBeaconMac(false);
     setNewBeaconMac('');
     setNewBeaconThreshold('');
   };
@@ -281,6 +321,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
 
     setTool(data);
     setAssigningBeacon(false);
+    setScanningBeaconMac(false);
     setNewBeaconMac('');
     setNewBeaconThreshold('');
     setMessage({ type: 'success', text: trimmedMac ? 'Beacon assigned.' : 'Beacon removed.' });
@@ -292,6 +333,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningQr(false);
     setAssigningLocation(false);
     setAssigningBeacon(false);
+    setScanningBeaconMac(false);
     setUpdatingPhoto(false);
     setEditingName(true);
   };
@@ -345,6 +387,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningQr(false);
     setAssigningLocation(false);
     setAssigningBeacon(false);
+    setScanningBeaconMac(false);
     setEditingName(false);
     setUpdatingPhoto(true);
     openPhotoCamera();
@@ -730,12 +773,22 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               <input
                 type="text"
                 value={newBeaconMac}
-                onChange={(e) => setNewBeaconMac(e.target.value)}
+                onChange={(e) => setNewBeaconMac(formatMacInput(e.target.value))}
                 placeholder="AA:BB:CC:DD:EE:FF"
                 style={{
-                  width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.75rem', boxSizing: 'border-box',
+                  width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.5rem', boxSizing: 'border-box',
                 }}
               />
+              <button
+                type="button"
+                onClick={() => setScanningBeaconMac((v) => !v)}
+                style={{ ...(scanningBeaconMac ? btnStyle : secondaryBtnStyle), marginTop: 0, marginBottom: '0.75rem' }}
+              >
+                {scanningBeaconMac ? 'Cancel Scan' : 'Scan Beacon QR Code'}
+              </button>
+              {scanningBeaconMac && (
+                <div id="beacon-qr-reader" style={{ width: '100%', marginBottom: '0.75rem' }}></div>
+              )}
               <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
                 Alarm RSSI Threshold (dBm)
               </label>
