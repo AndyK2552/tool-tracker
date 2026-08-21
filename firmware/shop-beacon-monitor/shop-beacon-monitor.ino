@@ -369,6 +369,40 @@ static void supabasePatchAlarm(const char* toolId, bool alarmActive, bool hasLas
   http.end();
 }
 
+// Stamps beacon_settings.board_last_seen so the app (and the scheduled
+// check-board-heartbeat Edge Function that emails admins) can tell the
+// board is still alive and reachable. Called once per fetch cycle -- see
+// networkTask() -- so roughly every TOOL_FETCH_INTERVAL_MS while online.
+// offline_alert_sent resets to false here too: coming back online should
+// re-arm the alert for the next outage, not leave it permanently tripped.
+static void sendHeartbeat() {
+  char iso[25];
+  if (!nowIso8601(iso, sizeof(iso))) return; // NTP not synced yet, try next cycle
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  String url = String(SUPABASE_URL) + "/rest/v1/beacon_settings?id=eq.true";
+  http.begin(client, url);
+  http.addHeader("apikey", SUPABASE_SERVICE_ROLE_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_ROLE_KEY);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Prefer", "return=minimal");
+
+  JsonDocument body;
+  body["board_last_seen"] = iso;
+  body["offline_alert_sent"] = false;
+  String payload;
+  serializeJson(body, payload);
+
+  int code = http.sendRequest("PATCH", payload);
+  if (code < 200 || code >= 300) {
+    Serial.printf("Supabase heartbeat PATCH failed: %d\n", code);
+  }
+  http.end();
+}
+
 // 0% = -90 dBm (loosest/farthest trigger), 100% = -30 dBm (strictest/
 // closest) -- must match the app's BeaconSettings.jsx pctToRssi().
 static int pctToRssi(int pct) {
@@ -668,6 +702,7 @@ static void networkTask(void* param) {
   unsigned long lastFetchMs = millis();
   fetchBeaconSettings();
   fetchTools();
+  sendHeartbeat();
 
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
@@ -678,6 +713,7 @@ static void networkTask(void* param) {
     if (now - lastFetchMs >= TOOL_FETCH_INTERVAL_MS) {
       fetchBeaconSettings();
       fetchTools();
+      sendHeartbeat();
       lastFetchMs = now;
     }
 

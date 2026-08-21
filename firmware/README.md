@@ -137,6 +137,9 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
 5. Tools with an active door alarm show a "⚠ Near door" badge on the Tool
    Status list and detail page — the board writes that state back to
    Supabase whenever it changes.
+6. Admin Home shows a "Shop beacon board online/offline — last seen ..."
+   status line, and admins get an email if it goes offline for too long —
+   see the next-next section.
 
 ## Updating the board's WiFi (via Bluetooth)
 
@@ -175,6 +178,27 @@ who knows it (or brute-forces it; it's sent in plaintext, there's no
 pairing/bonding here) can change the board's network, so treat it like a
 low-stakes PIN, not a real credential, and change the placeholder default
 before relying on this.
+
+## Alerting when the board goes offline
+
+The board is only useful while it's actually running — if it loses power or
+WiFi, the door alarm silently stops working with nothing to indicate that.
+The board can't notify anyone about itself going offline (no network means
+no way to send anything), so this works as a heartbeat instead: the board
+stamps `beacon_settings.board_last_seen` on every successful poll of
+Supabase (`sendHeartbeat()`, roughly every 5s while online), and a separate,
+always-on watcher — a Supabase Edge Function on a 5-minute cron schedule —
+checks whether that timestamp has gone stale and emails every admin
+(`profiles` where `is_admin = true`) if so. It only fires once per outage:
+the board resets the alert flag on its next successful heartbeat, so
+reconnecting re-arms it for the next time.
+
+Admin Home also shows a live "Shop beacon board online/offline — last seen
+..." status line, refreshed every 30s, using the same `board_last_seen`
+column — that one's driven straight from the app, no extra setup needed.
+The email alert needs its own one-time setup (a Resend account for sending
+mail, the Edge Function deployed, and a cron job registered) — see
+[`../supabase/functions/README.md`](../supabase/functions/README.md).
 
 ## Behavior summary
 
