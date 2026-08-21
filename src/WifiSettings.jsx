@@ -36,7 +36,6 @@ function WifiSettings({ onBack, onHome }) {
 
   const sectionStyle = { marginBottom: '1.75rem' };
   const sectionLabelStyle = { color: colors.white, fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' };
-  const helpStyle = { fontSize: '0.8rem', color: colors.textMuted, margin: '0.35rem 0 0' };
 
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
@@ -58,15 +57,46 @@ function WifiSettings({ onBack, onHome }) {
         )}
 
         <div style={sectionStyle}>
-          <label style={{ ...sectionLabelStyle, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input type="checkbox" checked={alertsEnabled} disabled={loading} onChange={handleToggleAlerts} />
-            Email admins if the Beacon Tower goes offline
+          <label
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.65rem',
+              cursor: loading ? 'default' : 'pointer',
+            }}
+          >
+            <span style={{ position: 'relative', display: 'inline-block', width: '46px', height: '26px', flexShrink: 0 }}>
+              <input
+                type="checkbox"
+                checked={alertsEnabled}
+                disabled={loading}
+                onChange={handleToggleAlerts}
+                style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%', margin: 0,
+                  opacity: 0, cursor: loading ? 'default' : 'pointer',
+                }}
+              />
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute', inset: 0,
+                  background: alertsEnabled ? colors.gold : colors.navyLight,
+                  border: `0.5px solid ${colors.navyBorder}`,
+                  borderRadius: '999px',
+                  transition: 'background-color 0.15s ease',
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute', top: '2px', left: alertsEnabled ? '22px' : '2px',
+                    width: '20px', height: '20px', borderRadius: '50%',
+                    background: colors.white,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.35)',
+                    transition: 'left 0.15s ease',
+                  }}
+                />
+              </span>
+            </span>
+            <span style={sectionLabelStyle}>Email admins if the Beacon Tower goes offline</span>
           </label>
-          <p style={helpStyle}>
-            Turn this off while installing or servicing the Beacon Tower, when network drops are
-            expected and don't mean anything's actually wrong — otherwise admins get an email every
-            time it briefly disconnects. Remember to turn it back on once it's set up permanently.
-          </p>
         </div>
 
         <div style={{ ...sectionStyle, paddingTop: '0.5rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
