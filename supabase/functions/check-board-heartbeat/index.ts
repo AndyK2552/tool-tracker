@@ -67,8 +67,8 @@ Deno.serve(async () => {
       body: JSON.stringify({
         from: Deno.env.get('ALERT_FROM_EMAIL'),
         to: recipients,
-        subject: '⚠ KYPD Tool Tracker: shop beacon board is offline',
-        html: `<p>The shop beacon board hasn't checked in for over ${OFFLINE_THRESHOLD_MINUTES} minutes ` +
+        subject: '⚠ KYPD Tool Tracker: Beacon Tower is offline',
+        html: `<p>The Beacon Tower hasn't checked in for over ${OFFLINE_THRESHOLD_MINUTES} minutes ` +
           `(last seen ${new Date(settings.board_last_seen).toLocaleString()}).</p>` +
           `<p>While it's down, the door alarm for Shop tools won't work. Check that it's powered on ` +
           `and connected to WiFi -- if the network changed, use WiFi Settings &rarr; Update WiFi via ` +

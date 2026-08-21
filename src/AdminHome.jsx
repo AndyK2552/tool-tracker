@@ -94,14 +94,14 @@ function AdminHome({ onNavigate, techName, truckNumber }) {
             }}
           >
             {boardLastSeen === null ? (
-              <span style={{ color: colors.textMuted }}>Shop beacon board: status not yet reported</span>
+              <span style={{ color: colors.textMuted }}>Beacon Tower: status not yet reported</span>
             ) : isBoardOffline(boardLastSeen) ? (
               <span style={{ color: '#ff8080', fontWeight: 'bold' }}>
-                ⚠ Shop beacon board offline — last seen {formatMinutesAgo(boardLastSeen)}
+                ⚠ Beacon Tower offline — last seen {formatMinutesAgo(boardLastSeen)}
               </span>
             ) : (
               <span style={{ color: colors.textMuted }}>
-                Shop beacon board online — last seen {formatMinutesAgo(boardLastSeen)}
+                Beacon Tower online — last seen {formatMinutesAgo(boardLastSeen)}
               </span>
             )}
           </div>

@@ -111,9 +111,9 @@ function BleWifiProvision() {
   return (
     <div>
       <p style={sliderHelpStyle}>
-        Connects directly to the board over Bluetooth to change its WiFi network — no internet or
-        WiFi connection needed on either side, so this works even if the board is already offline
-        (e.g. its old network is gone). The board must be powered on and within range. Chrome/Edge only.
+        Connects directly to the Beacon Tower over Bluetooth to change its WiFi network — no internet or
+        WiFi connection needed on either side, so this works even if the Beacon Tower is already offline
+        (e.g. its old network is gone). The Beacon Tower must be powered on and within range. Chrome/Edge only.
       </p>
 
       {!connected ? (
@@ -154,7 +154,7 @@ function BleWifiProvision() {
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button onClick={handleSend} disabled={sending} style={btnStyle}>
-              {sending ? 'Sending...' : 'Send to board'}
+              {sending ? 'Sending...' : 'Send to Beacon Tower'}
             </button>
             <button onClick={handleDisconnect} style={secondaryBtnStyle}>
               Disconnect
@@ -165,7 +165,7 @@ function BleWifiProvision() {
 
       {status && (
         <p style={{ ...sliderHelpStyle, color: colors.textMuted, marginTop: '0.75rem' }}>
-          Board says: {status}
+          Beacon Tower says: {status}
         </p>
       )}
     </div>

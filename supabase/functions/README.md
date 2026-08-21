@@ -1,6 +1,6 @@
 # check-board-heartbeat
 
-Emails every admin if the shop beacon board goes quiet for too long. See the
+Emails every admin if the Beacon Tower goes quiet for too long. See the
 comment at the top of [`check-board-heartbeat/index.ts`](check-board-heartbeat/index.ts)
 for how it decides that and what it sends.
 
@@ -39,13 +39,13 @@ for how it decides that and what it sends.
      — read the comments at the top first, it needs a Vault secret and your
      project ref filled in before running.
 
-6. **Re-flash the board** with the updated `shop-beacon-monitor.ino` so it
-   starts sending its heartbeat.
+6. **Re-flash the Beacon Tower** with the updated `shop-beacon-monitor.ino`
+   so it starts sending its heartbeat.
 
 ## Testing it without waiting 10 minutes
 
 Temporarily lower `OFFLINE_THRESHOLD_MINUTES` in `index.ts` to something
-like `1`, redeploy, power off the board, and either wait for the next
+like `1`, redeploy, power off the Beacon Tower, and either wait for the next
 5-minute cron tick or invoke it directly:
 
 ```

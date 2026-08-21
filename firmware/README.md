@@ -1,15 +1,15 @@
 # Shop Beacon Monitor (ESP32-S3)
 
-Mount a single ESP32-S3 board at the shop **door/exit**. It watches BlueCharm
-BLE beacons attached to Shop tools, and if a tool is still **Available** in
-the Tool Tracker app but its beacon's signal is *strong* — i.e. it's being
-carried near the door — the buzzer sounds. It's a rough "someone's walking
-off with this without checking it out" alarm. It goes quiet again once the
-beacon moves back away from the door, or once the tool gets checked out
-properly in the app.
+Mount a single ESP32-S3 Beacon Tower at the shop **door/exit**. It watches
+BlueCharm BLE beacons attached to Shop tools, and if a tool is still
+**Available** in the Tool Tracker app but its beacon's signal is *strong* —
+i.e. it's being carried near the door — the buzzer sounds. It's a rough
+"someone's walking off with this without checking it out" alarm. It goes
+quiet again once the beacon moves back away from the door, or once the tool
+gets checked out properly in the app.
 
-One board watches every Shop tool that has a beacon assigned — you don't
-need one board per tool.
+One Beacon Tower watches every Shop tool that has a beacon assigned — you
+don't need one Beacon Tower per tool.
 
 ## How it decides proximity
 
@@ -19,9 +19,9 @@ practice than converting to meters. Unlike an earlier version of this
 firmware, the RSSI thresholds aren't per-tool anymore — they're set **once,
 for every tool**, from the app's **Beacon Settings** page (Home → Beacon
 Settings, admin only), which writes to a single-row `beacon_settings` table
-the board polls every ~5s. That means you can retune the alarm distance and
-chirp behavior live from your phone while watching the Serial Monitor,
-without reflashing.
+the Beacon Tower polls every ~5s. That means you can retune the alarm
+distance and chirp behavior live from your phone while watching the Serial
+Monitor, without reflashing.
 
 Three sliders control it:
 - **Warning Beep Distance** (0-100%) — where chirping starts.
@@ -46,15 +46,16 @@ firmware smooths each beacon's RSSI with an exponential moving average
 beep pace tracks the real distance trend rather than sample-to-sample
 jitter.
 
-The beacon's onboard motion sensor isn't wired into this board at all — it's
-not needed for this logic. BlueCharm beacons with a motion sensor typically
-switch to a faster BLE advertising interval when they move, which just means
-the board gets fresher RSSI readings while the tool is in motion. All the
-alarm logic here runs off RSSI vs. threshold + the app's status.
+The beacon's onboard motion sensor isn't wired into the Beacon Tower at
+all — it's not needed for this logic. BlueCharm beacons with a motion
+sensor typically switch to a faster BLE advertising interval when they
+move, which just means the Beacon Tower gets fresher RSSI readings while
+the tool is in motion. All the alarm logic here runs off RSSI vs.
+threshold + the app's status.
 
 ## Hardware
 
-- Lonely Binary ESP32-S3 board
+- Lonely Binary ESP32-S3 board — this is the Beacon Tower.
 - [DIYables Passive Buzzer Module](https://diyables.io/products/passive-buzzer-module)
   (3-pin PCB module: `S`, `VCC`, `GND`) — no external driver transistor
   needed, it's designed to be driven directly from a GPIO's PWM signal.
@@ -63,8 +64,9 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
   buzzer instead of this module, drive it through an NPN transistor as a
   low-side switch rather than straight off the GPIO.)
 - BlueCharm beacon with motion sensor, one per tool you want monitored
-- No extra hardware for the LED indicator — it uses the board's built-in
-  WS2812 RGB LED on GPIO 48, blinking blue in lockstep with the buzzer.
+- No extra hardware for the LED indicator — it uses the Beacon Tower's
+  built-in WS2812 RGB LED on GPIO 48, blinking blue in lockstep with the
+  buzzer.
 
 ## Firmware setup
 
@@ -76,7 +78,7 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
      `btdm:` init is the signature of this mismatch) — 2.x is the version to
      use with current Boards Manager releases.
    - **ArduinoJson** by bblanchon — version 7.x.
-   - **FastLED** by Daniel Garcia — drives the board's built-in RGB LED.
+   - **FastLED** by Daniel Garcia — drives the Beacon Tower's built-in RGB LED.
 2. Make sure your installed **esp32 board package** (Boards Manager) is on
    the 3.x line — this sketch uses the current pin-based `ledcAttach` /
    `ledcWriteTone` API for the buzzer. If you're stuck on core 2.x, swap
@@ -97,10 +99,11 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
    - Your shop WiFi SSID/password
    - `SUPABASE_URL` — same value as `VITE_SUPABASE_URL` in `tool-tracker/.env`
    - `SUPABASE_SERVICE_ROLE_KEY` — **not** the anon key. The `tools`
-     table's RLS policies only allow `authenticated` access, so the board
-     needs the service_role key (Supabase → Project Settings → API Keys →
-     "service_role") to read/write it. This key bypasses RLS entirely —
-     treat it like a root password, never put it anywhere web-facing.
+     table's RLS policies only allow `authenticated` access, so the Beacon
+     Tower needs the service_role key (Supabase → Project Settings → API
+     Keys → "service_role") to read/write it. This key bypasses RLS
+     entirely — treat it like a root password, never put it anywhere
+     web-facing.
    - `BUZZER_PIN`
 5. Flash `shop-beacon-monitor.ino`.
 6. Open the Serial Monitor at 115200 baud to watch WiFi connection, RSSI
@@ -112,10 +115,10 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
    [`sql/add_beacon_settings_table.sql`](../sql/add_beacon_settings_table.sql)
    once each in your Supabase SQL editor. The first adds `beacon_mac`,
    `beacon_alarm_active`, and `beacon_last_seen` to the `tools` table; the
-   second adds the single-row `beacon_settings` table the board polls for
-   the warning/threshold/chirp/WiFi values (admin-only to view or edit, via
-   RLS — it holds a WiFi password). If you set up `beacon_settings` before
-   WiFi credentials were added to it, also run
+   second adds the single-row `beacon_settings` table the Beacon Tower
+   polls for the warning/threshold/chirp/WiFi values (admin-only to view or
+   edit, via RLS — it holds a WiFi password). If you set up
+   `beacon_settings` before WiFi credentials were added to it, also run
    [`sql/add_wifi_credentials_to_beacon_settings.sql`](../sql/add_wifi_credentials_to_beacon_settings.sql).
 2. In the app, open a Shop tool as an admin and use **Assign Beacon** to
    enter the beacon's MAC address (no per-tool threshold anymore — that's
@@ -126,75 +129,76 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
    advertising format) so it's easy to pick out. This is more reliable than
    a phone scanner app: iOS hides real BLE MAC addresses from apps for
    privacy, so nRF Connect and similar only work for this on Android. Once
-   you've noted the MAC, re-flash `shop-beacon-monitor.ino` as the board's
-   real firmware.
+   you've noted the MAC, re-flash `shop-beacon-monitor.ino` as the Beacon
+   Tower's real firmware.
 3. Tune the three sliders on the app's **Beacon Settings** page (Home →
    Beacon Settings) while watching the Serial Monitor — changes take effect
-   on the board's next poll, no reflashing needed.
+   on the Beacon Tower's next poll, no reflashing needed.
 4. Beacon Settings has a **WiFi Settings** button that opens a page for
-   changing the board's network (e.g. switching providers) without
+   changing the Beacon Tower's network (e.g. switching providers) without
    reflashing — see the next section.
 5. Tools with an active door alarm show a "⚠ Near door" badge on the Tool
-   Status list and detail page — the board writes that state back to
+   Status list and detail page — the Beacon Tower writes that state back to
    Supabase whenever it changes.
-6. Admin Home shows a "Shop beacon board online/offline — last seen ..."
-   status line, and admins get an email if it goes offline for too long —
-   see the next-next section.
+6. Admin Home shows a "Beacon Tower online/offline — last seen ..." status
+   line, and admins get an email if it goes offline for too long — see the
+   next-next section.
 
-## Updating the board's WiFi (via Bluetooth)
+## Updating the Beacon Tower's WiFi (via Bluetooth)
 
 The WiFi Settings page's **Update WiFi via Bluetooth** section talks to the
-board directly over BLE to change its network — no WiFi/internet required
-on either side, which also makes it work even if the board is already
-offline (old router gone, provider swapped, etc., with no network path back
-to it at all).
+Beacon Tower directly over BLE to change its network — no WiFi/internet
+required on either side, which also makes it work even if the Beacon Tower
+is already offline (old router gone, provider swapped, etc., with no
+network path back to it at all).
 
-The board runs both a BLE **central** role (scanning for tool beacons) and a
-BLE **peripheral** role (a small GATT server for this) at the same time —
-NimBLE-Arduino 2.x supports both concurrently on one radio. On boot it
-advertises as `KYPD Tool Tracker` with a provisioning service; the browser
-connects to that service and writes `{pin, ssid, password}` as JSON to its
-credentials characteristic, then listens for a status notification back
-(`received -- connecting...`, then `connected: <ip>` or `failed: ...`). The
-new credentials are tried live first; only a successful connection gets
-saved to flash (so it survives a reboot too) — a failure reverts to
-whatever was working before, so a typo can't strand the board.
+The Beacon Tower runs both a BLE **central** role (scanning for tool
+beacons) and a BLE **peripheral** role (a small GATT server for this) at
+the same time — NimBLE-Arduino 2.x supports both concurrently on one radio.
+On boot it advertises as `KYPD Tool Tracker` with a provisioning service;
+the browser connects to that service and writes `{pin, ssid, password}` as
+JSON to its credentials characteristic, then listens for a status
+notification back (`received -- connecting...`, then `connected: <ip>` or
+`failed: ...`). The new credentials are tried live first; only a successful
+connection gets saved to flash (so it survives a reboot too) — a failure
+reverts to whatever was working before, so a typo can't strand the Beacon
+Tower.
 
 Note that a BLE peripheral doesn't advertise again after a client
 disconnects unless told to — the sketch enables that explicitly
 (`server->advertiseOnDisconnect(true)` in `startBleProvisioning()`), so the
-board stays discoverable for repeat connections instead of going dark after
-the first one.
+Beacon Tower stays discoverable for repeat connections instead of going
+dark after the first one.
 
 This uses the **Web Bluetooth API**, which only works in Chromium browsers
 (Chrome/Edge) on desktop or Android — **not Safari or iOS**, which don't
 support it at all. If a phone needs to do this and it's an iPhone, use a
 laptop instead, or borrow an Android device.
 
-The PIN in the request is a shared secret between the board
+The PIN in the request is a shared secret between the Beacon Tower
 (`BLE_PROVISIONING_PIN` in `config.h`) and the app
 (`PROVISIONING_PIN` in `src/BleWifiProvision.jsx`) — anyone within BLE range
 who knows it (or brute-forces it; it's sent in plaintext, there's no
-pairing/bonding here) can change the board's network, so treat it like a
-low-stakes PIN, not a real credential, and change the placeholder default
-before relying on this.
+pairing/bonding here) can change the Beacon Tower's network, so treat it
+like a low-stakes PIN, not a real credential, and change the placeholder
+default before relying on this.
 
-## Alerting when the board goes offline
+## Alerting when the Beacon Tower goes offline
 
-The board is only useful while it's actually running — if it loses power or
-WiFi, the door alarm silently stops working with nothing to indicate that.
-The board can't notify anyone about itself going offline (no network means
-no way to send anything), so this works as a heartbeat instead: the board
-stamps `beacon_settings.board_last_seen` on every successful poll of
-Supabase (`sendHeartbeat()`, roughly every 5s while online), and a separate,
-always-on watcher — a Supabase Edge Function on a 5-minute cron schedule —
-checks whether that timestamp has gone stale and emails every admin
-(`profiles` where `is_admin = true`) if so. It only fires once per outage:
-the board resets the alert flag on its next successful heartbeat, so
-reconnecting re-arms it for the next time.
+The Beacon Tower is only useful while it's actually running — if it loses
+power or WiFi, the door alarm silently stops working with nothing to
+indicate that. The Beacon Tower can't notify anyone about itself going
+offline (no network means no way to send anything), so this works as a
+heartbeat instead: the Beacon Tower stamps `beacon_settings.board_last_seen`
+on every successful poll of Supabase (`sendHeartbeat()`, roughly every 5s
+while online), and a separate, always-on watcher — a Supabase Edge Function
+on a 5-minute cron schedule — checks whether that timestamp has gone stale
+and emails every admin (`profiles` where `is_admin = true`) if so. It only
+fires once per outage: the Beacon Tower resets the alert flag on its next
+successful heartbeat, so reconnecting re-arms it for the next time.
 
-Admin Home also shows a live "Shop beacon board online/offline — last seen
-..." status line, refreshed every 30s, using the same `board_last_seen`
+Admin Home also shows a live "Beacon Tower online/offline — last seen ..."
+status line, refreshed every 30s, using the same `board_last_seen`
 column — that one's driven straight from the app, no extra setup needed.
 The email alert needs its own one-time setup (a Resend account for sending
 mail, the Edge Function deployed, and a cron job registered) — see
@@ -226,8 +230,8 @@ mail, the Edge Function deployed, and a cron job registered) — see
   chirps (starting at the configured Chirp Frequency) that shrinks as the
   beacon gets closer, merging into a continuous tone once the gap hits
   zero at the threshold distance. It's the repeat rate that conveys
-  proximity, not the chirp length — the board follows whichever watched
-  tool is currently most urgent (closest to continuous), and goes silent
-  once none are Available and in range.
+  proximity, not the chirp length — the Beacon Tower follows whichever
+  watched tool is currently most urgent (closest to continuous), and goes
+  silent once none are Available and in range.
 - The BLE scan restarts every ~20s in the background as a safety net
   against rare stalls in long-running continuous scans.
