@@ -37,6 +37,12 @@ dBm (loosest, triggers from farthest away), 100% is -30 dBm (strictest,
 must be right up close). The firmware does the identical conversion in
 `fetchBeaconSettings()`.
 
+Raw BLE RSSI is noisy — readings can swing 10-15 dB standing still. The
+firmware smooths each beacon's RSSI with an exponential moving average
+(`RSSI_EMA_ALPHA`, 0.3 by default) before using it for anything, so the
+beep pace tracks the real distance trend rather than sample-to-sample
+jitter.
+
 The beacon's onboard motion sensor isn't wired into this board at all — it's
 not needed for this logic. BlueCharm beacons with a motion sensor typically
 switch to a faster BLE advertising interval when they move, which just means

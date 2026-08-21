@@ -46,13 +46,19 @@
 
 #define MAX_TOOLS 40
 
+// Weight given to each new RSSI sample in the running average (0-1).
+// Raw BLE RSSI is noisy -- without this, the beep pace tracks sample-to-
+// sample jitter as much as actual distance.
+#define RSSI_EMA_ALPHA 0.3f
+
 struct MonitoredTool {
   char id[40];
   char name[64];
   char beaconMac[18];
   bool isAvailable;
   bool alarmActive;   // last alarm state we told Supabase about
-  int8_t currentRssi;
+  int8_t currentRssi; // smoothed + rounded -- what alarm/beep logic reads
+  float rssiEma;       // raw smoothing accumulator behind currentRssi
   unsigned long lastSeenMs;
   bool everSeen;
   bool pendingSync;    // alarmActive changed locally, needs a PATCH
@@ -98,9 +104,12 @@ class BeaconScanCallbacks : public NimBLEScanCallbacks {
     int idx = findToolByMac(mac);
     if (idx < 0) return;
 
-    tools[idx].currentRssi = advertisedDevice->getRSSI();
-    tools[idx].lastSeenMs = millis();
-    tools[idx].everSeen = true;
+    MonitoredTool& t = tools[idx];
+    int8_t rawRssi = advertisedDevice->getRSSI();
+    t.rssiEma = t.everSeen ? (RSSI_EMA_ALPHA * rawRssi + (1.0f - RSSI_EMA_ALPHA) * t.rssiEma) : (float)rawRssi;
+    t.currentRssi = (int8_t)lroundf(t.rssiEma);
+    t.lastSeenMs = millis();
+    t.everSeen = true;
   }
 };
 
@@ -261,6 +270,7 @@ static void fetchTools() {
     int prevIdx = findToolByMac(t.beaconMac);
     if (prevIdx >= 0) {
       t.currentRssi = tools[prevIdx].currentRssi;
+      t.rssiEma = tools[prevIdx].rssiEma;
       t.lastSeenMs = tools[prevIdx].lastSeenMs;
       t.everSeen = tools[prevIdx].everSeen;
     }

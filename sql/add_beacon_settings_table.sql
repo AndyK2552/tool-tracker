@@ -12,7 +12,7 @@
 create table if not exists beacon_settings (
   id boolean primary key default true,
   warning_beep_distance_pct integer not null default 33 check (warning_beep_distance_pct between 0 and 100),
-  beep_duration_ms integer not null default 5 check (beep_duration_ms between 1 and 100),
+  beep_duration_ms integer not null default 5 check (beep_duration_ms between 0 and 1000),
   threshold_distance_pct integer not null default 67 check (threshold_distance_pct between 0 and 100),
   updated_at timestamptz not null default now()
 );
