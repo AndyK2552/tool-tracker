@@ -23,14 +23,15 @@
 #define BUZZER_PIN 6
 #define BUZZER_FREQUENCY_HZ 2500
 
-// Warning distance, threshold distance, and chirp length are all set from
-// the app's Beacon Settings page (Supabase beacon_settings table), not
-// here -- see fetchBeaconSettings() in the sketch. Only the buzzer's fixed
-// mechanics stay compile-time:
-#define BUZZER_MAX_DUTY 128        // 50% duty -- the loudest a square wave gets
-#define BUZZER_BEEP_PERIOD_MS 1000 // cycle length; "on" time grows toward this = continuous
+// Warning distance, threshold distance, and the max gap between chirps
+// (the app's "Beep Frequency" slider) are all set from the app's Beacon
+// Settings page (Supabase beacon_settings table), not here -- see
+// fetchBeaconSettings() in the sketch. Only the buzzer's fixed mechanics
+// stay compile-time:
+#define BUZZER_MAX_DUTY 128 // 50% duty -- the loudest a square wave gets
 
 // Timing.
 #define TOOL_FETCH_INTERVAL_MS 5000UL   // how often to re-poll Supabase for tool status + settings
 #define ALARM_EVAL_INTERVAL_MS 1000UL   // how often to re-check RSSI vs threshold
 #define BEACON_STALE_MS 15000UL         // a beacon not heard from in this long counts as "out of range"
+#define SCAN_RESTART_INTERVAL_MS 20000UL // periodic BLE scan restart, guards against rare scan stalls

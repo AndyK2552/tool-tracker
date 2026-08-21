@@ -25,12 +25,15 @@ without reflashing.
 
 Three sliders control it:
 - **Warning Beep Distance** (0-100%) — where chirping starts.
-- **Beep Frequency** (1-100ms) — length of the shortest chirp, right at that
-  starting point.
-- **Threshold Distance** (0-100%) — where it becomes a continuous tone; this
-  is also what's written back to Supabase as the "⚠ Near door" alarm state.
-  Can't be set to trigger farther out than Warning Beep Distance — the app
-  clamps Warning Beep Distance down to match if you try.
+- **Beep Frequency** (0-1000ms) — the gap between chirps right at that
+  starting point (each chirp itself is a fixed length, `BUZZER_PULSE_ON_MS`
+  in the sketch, 100ms by default). The gap shrinks as the beacon gets
+  closer, so it's the *rate* that speeds up, not the chirp length.
+- **Threshold Distance** (0-100%) — where the gap hits zero and it becomes
+  a continuous tone; this is also what's written back to Supabase as the
+  "⚠ Near door" alarm state. Can't be set to trigger farther out than
+  Warning Beep Distance — the app clamps Warning Beep Distance down to
+  match if you try.
 
 Both distance sliders map to RSSI via `rssi = -90 + pct * 0.6` — 0% is -90
 dBm (loosest, triggers from farthest away), 100% is -30 dBm (strictest,
@@ -60,6 +63,8 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
   buzzer instead of this module, drive it through an NPN transistor as a
   low-side switch rather than straight off the GPIO.)
 - BlueCharm beacon with motion sensor, one per tool you want monitored
+- No extra hardware for the LED indicator — it uses the board's built-in
+  WS2812 RGB LED on GPIO 48, blinking blue in lockstep with the buzzer.
 
 ## Firmware setup
 
@@ -71,6 +76,7 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
      `btdm:` init is the signature of this mismatch) — 2.x is the version to
      use with current Boards Manager releases.
    - **ArduinoJson** by bblanchon — version 7.x.
+   - **FastLED** by Daniel Garcia — drives the board's built-in RGB LED.
 2. Make sure your installed **esp32 board package** (Boards Manager) is on
    the 3.x line — this sketch uses the current pin-based `ledcAttach` /
    `ledcWriteTone` API for the buzzer. If you're stuck on core 2.x, swap
@@ -128,22 +134,32 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
 
 ## Behavior summary
 
-- Every ~5s the board polls Supabase for two things: all Shop tools with a
+- All WiFi/Supabase networking runs on its own FreeRTOS task, pinned to the
+  opposite CPU core from the main buzzer/BLE loop. HTTPS requests are
+  blocking and can take a second or more; running them on a separate task
+  means they never freeze the buzzer/LED cadence the way they would if
+  inlined into `loop()`. A mutex guards the handful of things both tasks
+  touch (the tools list and the warning/threshold/beep settings).
+- Every ~5s that task polls Supabase for two things: all Shop tools with a
   beacon assigned (their checkout/condition status), and the single global
   `beacon_settings` row (warning distance, threshold distance, chirp
-  length).
-- It continuously BLE-scans in the background and tracks the latest RSSI
-  seen for each known beacon MAC.
+  length). It also sends any pending "⚠ Near door" state changes back to
+  Supabase.
+- It continuously BLE-scans in the background and tracks each known
+  beacon's RSSI, smoothed with an exponential moving average to filter out
+  normal BLE signal noise.
 - Every ~1s it re-evaluates each tool. The app-facing "alarm" state (what
   gets written to Supabase and shown as the "⚠ Near door" badge) is
   **Available** AND the beacon was heard from in the last 15s with RSSI
   stronger than (i.e. numerically greater than) the global threshold.
 - The buzzer itself is more gradual: for each **Available** tool, it maps
-  RSSI to a chirp pattern — silent at/below the warning distance, starting
-  with the configured shortest chirp once past that and getting
-  longer/more frequent as the beacon gets closer, merging into a
-  continuous tone at the threshold distance. The board follows whichever
-  watched tool is currently most urgent, and goes silent once none are
-  Available and in range.
-- Alarm state changes (the threshold-crossing, not the chirp ramp) are
-  written back to Supabase so the app reflects them.
+  RSSI to a pulse pattern — silent at/below the warning distance, then
+  pulsing at a fixed chirp length (`BUZZER_PULSE_ON_MS`) with a gap between
+  chirps (starting at the configured Beep Frequency) that shrinks as the
+  beacon gets closer, merging into a continuous tone once the gap hits
+  zero at the threshold distance. It's the repeat rate that conveys
+  proximity, not the chirp length — the board follows whichever watched
+  tool is currently most urgent (closest to continuous), and goes silent
+  once none are Available and in range.
+- The BLE scan restarts every ~20s in the background as a safety net
+  against rare stalls in long-running continuous scans.

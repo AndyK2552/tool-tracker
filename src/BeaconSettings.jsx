@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import PageHeader from './PageHeader';
+import BeaconRangeVisual from './BeaconRangeVisual';
 import { colors, btnStyle } from './theme';
 
 // 0% = -90 dBm (loosest/farthest trigger), 100% = -30 dBm (strictest/closest).
@@ -96,19 +97,17 @@ function BeaconSettings({ onHome }) {
         )}
 
         <div style={sliderRowStyle}>
-          <label style={sliderLabelStyle}>
-            Warning Beep Distance: <span style={sliderValueStyle}>{warningPct}%</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={warningPct}
-            onChange={(e) => applyWarning(Number(e.target.value))}
-            style={{ width: '100%' }}
+          <label style={sliderLabelStyle}>Warning &amp; Threshold Distance</label>
+          <BeaconRangeVisual
+            warningPct={warningPct}
+            thresholdPct={thresholdPct}
+            warningRssi={pctToRssi(warningPct)}
+            thresholdRssi={pctToRssi(thresholdPct)}
+            onWarningChange={applyWarning}
+            onThresholdChange={applyThreshold}
           />
           <p style={sliderHelpStyle}>
-            Chirping starts around {pctToRssi(warningPct)} dBm. Can't be set closer-in than Threshold Distance below.
+            Drag the red ring (Threshold — becomes a continuous tone, shown as "⚠ Near door" in the app) or the yellow ring (Warning — chirping starts). Threshold can't be dragged outside Warning, or vice versa.
           </p>
         </div>
 
@@ -125,24 +124,7 @@ function BeaconSettings({ onHome }) {
             style={{ width: '100%' }}
           />
           <p style={sliderHelpStyle}>
-            Length of the shortest chirp, right as it crosses Warning Beep Distance. Grows longer as it gets closer.
-          </p>
-        </div>
-
-        <div style={sliderRowStyle}>
-          <label style={sliderLabelStyle}>
-            Threshold Distance: <span style={sliderValueStyle}>{thresholdPct}%</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={thresholdPct}
-            onChange={(e) => applyThreshold(Number(e.target.value))}
-            style={{ width: '100%' }}
-          />
-          <p style={sliderHelpStyle}>
-            Becomes a continuous tone around {pctToRssi(thresholdPct)} dBm — this is also what's shown as "⚠ Near door" in the app.
+            Gap between chirps right as it crosses Warning Beep Distance (each chirp itself is a fixed length). The gap shrinks as it gets closer, until the chirps run together into a continuous tone.
           </p>
         </div>
 

@@ -19,9 +19,18 @@
 // intervals on movement, which just means fresher RSSI readings here. All
 // the distance/alarm logic runs off RSSI.
 //
+// All Supabase/WiFi networking runs on its own FreeRTOS task (see
+// networkTask()) pinned to the opposite core from the main loop(). HTTPS
+// requests are blocking and can take a second or more; if they ran inline
+// in loop() (as an earlier version did), the buzzer/LED would visibly
+// freeze for that long every time the board polled. A mutex (stateMutex)
+// guards the few things both tasks touch (the tools[] array and the
+// warning/threshold/beep settings) -- see comments at each use.
+//
 // Libraries required (Arduino Library Manager):
 //   - NimBLE-Arduino by h2zero, latest 2.x release
 //   - ArduinoJson by bblanchon, version 7.x
+//   - FastLED by Daniel Garcia, for the onboard WS2812 RGB LED (GPIO 48)
 //
 // Targets Arduino-ESP32 core 3.x (current default in Boards Manager), which
 // uses the pin-based ledcAttach/ledcWriteTone API for the passive buzzer.
@@ -41,8 +50,21 @@
 #include <NimBLEDevice.h>
 #include <time.h>
 #include <math.h>
+#include <limits.h>
+#include <FastLED.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 #include "config.h"
+
+// Onboard WS2812 RGB LED (Lonely Binary boards) -- blinks blue in lockstep
+// with the buzzer as a visual confirmation of the same on/off state. Only
+// ever touched from the main loop() task (same as the buzzer), so it
+// doesn't need stateMutex.
+#define RGB_LED_PIN 48
+#define RGB_LED_COUNT 1
+static CRGB rgbLed[RGB_LED_COUNT];
 
 #define MAX_TOOLS 40
 
@@ -64,20 +86,29 @@ struct MonitoredTool {
   bool pendingSync;    // alarmActive changed locally, needs a PATCH
 };
 
+// Touched by: the BLE scan callback (its own NimBLE task), evaluateAlarms()
+// (main loop task), and networkTask() -- always take stateMutex first.
 static MonitoredTool tools[MAX_TOOLS];
 static int toolCount = 0;
 
 // Global beacon_settings, read from Supabase (see fetchBeaconSettings()).
 // These fallback values match the SQL migration's default row, used only
-// until the first successful fetch completes.
+// until the first successful fetch completes. Same locking rule as tools[].
+// beepMaxGapMs is the app's "Beep Frequency" slider (still named/stored as
+// beep_duration_ms in Supabase) -- despite the historical name, it's the
+// GAP between chirps at the warning edge, not a duration: each chirp's
+// on-time is the fixed BUZZER_PULSE_ON_MS below, always. The gap shrinks
+// from beepMaxGapMs down to 0 (continuous) as the beacon nears the
+// threshold -- see rssiToBeepTiming().
 static int rampStartRssi = -70;
 static int globalThresholdRssi = -50;
-static unsigned long beepMinOnMs = 5;
+static unsigned long beepMaxGapMs = 1000;
+
+static SemaphoreHandle_t stateMutex;
 
 static NimBLEScan* bleScan = nullptr;
 static uint8_t buzzerDuty = 0;
-static unsigned long lastFetchMs = 0;
-static unsigned long lastEvalMs = 0;
+static unsigned long lastScanRestartMs = 0;
 
 // ---------- helpers ----------
 
@@ -87,6 +118,7 @@ static void macToString(const NimBLEAddress& addr, char* out, size_t outLen) {
   for (size_t i = 0; out[i]; i++) out[i] = toupper(out[i]);
 }
 
+// Caller must already hold stateMutex.
 static int findToolByMac(const char* mac) {
   for (int i = 0; i < toolCount; i++) {
     if (strcasecmp(tools[i].beaconMac, mac) == 0) return i;
@@ -101,15 +133,17 @@ class BeaconScanCallbacks : public NimBLEScanCallbacks {
     char mac[18];
     macToString(advertisedDevice->getAddress(), mac, sizeof(mac));
 
+    xSemaphoreTake(stateMutex, portMAX_DELAY);
     int idx = findToolByMac(mac);
-    if (idx < 0) return;
-
-    MonitoredTool& t = tools[idx];
-    int8_t rawRssi = advertisedDevice->getRSSI();
-    t.rssiEma = t.everSeen ? (RSSI_EMA_ALPHA * rawRssi + (1.0f - RSSI_EMA_ALPHA) * t.rssiEma) : (float)rawRssi;
-    t.currentRssi = (int8_t)lroundf(t.rssiEma);
-    t.lastSeenMs = millis();
-    t.everSeen = true;
+    if (idx >= 0) {
+      MonitoredTool& t = tools[idx];
+      int8_t rawRssi = advertisedDevice->getRSSI();
+      t.rssiEma = t.everSeen ? (RSSI_EMA_ALPHA * rawRssi + (1.0f - RSSI_EMA_ALPHA) * t.rssiEma) : (float)rawRssi;
+      t.currentRssi = (int8_t)lroundf(t.rssiEma);
+      t.lastSeenMs = millis();
+      t.everSeen = true;
+    }
+    xSemaphoreGive(stateMutex);
   }
 };
 
@@ -140,7 +174,7 @@ static void connectWiFi() {
     Serial.println(" connected: " + WiFi.localIP().toString());
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   } else {
-    Serial.println(" failed, will retry in loop()");
+    Serial.println(" failed, will retry");
   }
 }
 
@@ -182,12 +216,14 @@ static bool supabaseGet(const String& path, JsonDocument& doc) {
   return ok;
 }
 
-static void supabasePatchAlarm(MonitoredTool& tool) {
+// Takes copied values rather than a MonitoredTool& so the network call
+// never happens while stateMutex is held.
+static void supabasePatchAlarm(const char* toolId, bool alarmActive, bool hasLastSeen) {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
 
-  String url = String(SUPABASE_URL) + "/rest/v1/tools?id=eq." + String(tool.id);
+  String url = String(SUPABASE_URL) + "/rest/v1/tools?id=eq." + String(toolId);
   http.begin(client, url);
   http.addHeader("apikey", SUPABASE_SERVICE_ROLE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_ROLE_KEY);
@@ -195,9 +231,9 @@ static void supabasePatchAlarm(MonitoredTool& tool) {
   http.addHeader("Prefer", "return=minimal");
 
   JsonDocument body;
-  body["beacon_alarm_active"] = tool.alarmActive;
+  body["beacon_alarm_active"] = alarmActive;
   char iso[25];
-  if (tool.everSeen && nowIso8601(iso, sizeof(iso))) {
+  if (hasLastSeen && nowIso8601(iso, sizeof(iso))) {
     body["beacon_last_seen"] = iso;
   }
   String payload;
@@ -205,7 +241,7 @@ static void supabasePatchAlarm(MonitoredTool& tool) {
 
   int code = http.sendRequest("PATCH", payload);
   if (code < 200 || code >= 300) {
-    Serial.printf("Supabase PATCH for %s failed: %d\n", tool.id, code);
+    Serial.printf("Supabase PATCH for %s failed: %d\n", toolId, code);
   }
   http.end();
 }
@@ -219,7 +255,7 @@ static int pctToRssi(int pct) {
 static void fetchBeaconSettings() {
   JsonDocument doc;
   String path = "/rest/v1/beacon_settings?select=warning_beep_distance_pct,beep_duration_ms,threshold_distance_pct";
-  if (!supabaseGet(path, doc)) return;
+  if (!supabaseGet(path, doc)) return; // network call -- never done while holding stateMutex
 
   JsonArray arr = doc.as<JsonArray>();
   if (arr.size() == 0) return;
@@ -227,22 +263,30 @@ static void fetchBeaconSettings() {
 
   int warningPct = row["warning_beep_distance_pct"] | 33;
   int thresholdPct = row["threshold_distance_pct"] | 67;
-  beepMinOnMs = row["beep_duration_ms"] | 5;
-  rampStartRssi = pctToRssi(warningPct);
-  globalThresholdRssi = pctToRssi(thresholdPct);
+  unsigned long newBeepMaxGapMs = row["beep_duration_ms"] | 1000;
+  int newRampStartRssi = pctToRssi(warningPct);
+  int newGlobalThresholdRssi = pctToRssi(thresholdPct);
 
-  Serial.printf("Beacon settings: warning=%d%% (%d dBm) beep=%lums threshold=%d%% (%d dBm)\n",
-    warningPct, rampStartRssi, beepMinOnMs, thresholdPct, globalThresholdRssi);
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  beepMaxGapMs = newBeepMaxGapMs;
+  rampStartRssi = newRampStartRssi;
+  globalThresholdRssi = newGlobalThresholdRssi;
+  xSemaphoreGive(stateMutex);
+
+  Serial.printf("Beacon settings: warning=%d%% (%d dBm) max gap=%lums threshold=%d%% (%d dBm)\n",
+    warningPct, newRampStartRssi, newBeepMaxGapMs, thresholdPct, newGlobalThresholdRssi);
 }
 
 static void fetchTools() {
   JsonDocument doc;
   String path = "/rest/v1/tools?location=eq.Shop&beacon_mac=not.is.null"
                 "&select=id,name,beacon_mac,is_checked_out,condition,beacon_alarm_active";
-  if (!supabaseGet(path, doc)) return;
+  if (!supabaseGet(path, doc)) return; // network call -- never done while holding stateMutex
 
   JsonArray arr = doc.as<JsonArray>();
-  static MonitoredTool updated[MAX_TOOLS]; // static: keep this ~5.6KB array off the loop task's stack
+  static MonitoredTool updated[MAX_TOOLS]; // static: keep this ~5.6KB array off this task's stack
+
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
   int updatedCount = 0;
 
   for (JsonObject row : arr) {
@@ -280,12 +324,39 @@ static void fetchTools() {
 
   memcpy(tools, updated, sizeof(MonitoredTool) * updatedCount);
   toolCount = updatedCount;
+  xSemaphoreGive(stateMutex);
 
-  Serial.printf("Fetched %d Shop tool(s) with a beacon assigned:\n", toolCount);
-  for (int i = 0; i < toolCount; i++) {
+  Serial.printf("Fetched %d Shop tool(s) with a beacon assigned:\n", updatedCount);
+  for (int i = 0; i < updatedCount; i++) {
     Serial.printf("  - %s (%s): beacon=%s available=%s\n",
-      tools[i].name, tools[i].id, tools[i].beaconMac,
-      tools[i].isAvailable ? "yes" : "no");
+      updated[i].name, updated[i].id, updated[i].beaconMac,
+      updated[i].isAvailable ? "yes" : "no");
+  }
+}
+
+// Sends a PATCH for every tool with pendingSync set, one at a time. Copies
+// each tool's fields out while holding stateMutex only briefly, then does
+// the actual (blocking) network call after releasing it.
+static void syncPendingAlarms() {
+  for (int i = 0; i < MAX_TOOLS; i++) {
+    xSemaphoreTake(stateMutex, portMAX_DELAY);
+    if (i >= toolCount) {
+      xSemaphoreGive(stateMutex);
+      break;
+    }
+    bool pending = tools[i].pendingSync;
+    char idCopy[40];
+    bool alarmActiveCopy = tools[i].alarmActive;
+    bool everSeenCopy = tools[i].everSeen;
+    if (pending) {
+      strncpy(idCopy, tools[i].id, sizeof(idCopy));
+      tools[i].pendingSync = false;
+    }
+    xSemaphoreGive(stateMutex);
+
+    if (pending) {
+      supabasePatchAlarm(idCopy, alarmActiveCopy, everSeenCopy);
+    }
   }
 }
 
@@ -293,20 +364,37 @@ static void fetchTools() {
 //
 // Volume via PWM duty cycle doesn't work reliably on resonant piezo buzzer
 // modules -- they tend to just be on or off regardless of instantaneous
-// duty. Instead, urgency is conveyed via pulse rate: short chirps that get
-// longer/more frequent as the beacon approaches, merging into a continuous
-// tone right at the threshold -- the same idea as a parking-sensor beeper.
+// duty. Instead, urgency is conveyed via pulse rate: chirps that happen
+// more often as the beacon approaches, merging into a continuous tone
+// right at the threshold -- the same idea as a parking-sensor beeper.
 //
-// beepOnMs is recomputed once per evaluateAlarms() cycle (~1s) from
-// whichever watched tool is closest to alarming; updateBuzzerPulse() reads
-// it every loop() iteration (no delay()) to do the actual fast on/off
-// toggling, since a 5ms pulse needs finer timing than the 1s eval cadence.
+// Every chirp is the same fixed length (BUZZER_PULSE_ON_MS) -- proximity
+// is conveyed entirely by the GAP between chirps shrinking (from
+// beepMaxGapMs down to 0), so beeps genuinely speed up as the beacon
+// approaches rather than just getting longer.
+//
+// evaluateAlarms() (~1s cadence, main loop task) recomputes
+// silent/continuous/onMs/offMs from whichever watched tool is currently
+// most urgent; updateBuzzerPulse() reads that every loop() iteration (no
+// delay(), never blocked by networking since that's on its own task now)
+// to do the actual on/off timing, since pulses can be a few ms long.
 
+#define BUZZER_PULSE_ON_MS 100 // fixed chirp length; only the gap between chirps varies
+
+static bool buzzerSilent = true;
+static bool buzzerContinuous = false;
 static unsigned long beepOnMs = 0;
+static unsigned long beepOffMs = 0;
+static bool pulseOn = false;
+static unsigned long pulseChangeMs = 0;
 
 static void initBuzzer() {
   ledcAttach(BUZZER_PIN, BUZZER_FREQUENCY_HZ, 8);
   ledcWrite(BUZZER_PIN, 0);
+
+  FastLED.addLeds<WS2812, RGB_LED_PIN, GRB>(rgbLed, RGB_LED_COUNT);
+  FastLED.clear();
+  FastLED.show();
 }
 
 static void setBuzzerOn(bool on) {
@@ -314,39 +402,73 @@ static void setBuzzerOn(bool on) {
   if (duty == buzzerDuty) return;
   buzzerDuty = duty;
   ledcWrite(BUZZER_PIN, duty);
+
+  rgbLed[0] = on ? CRGB::Blue : CRGB::Black;
+  FastLED.show();
 }
 
-// Call every loop() iteration -- does the actual pulsing based on the
-// beepOnMs target that evaluateAlarms() last computed.
+// Call every loop() iteration -- does the actual on/off timing based on
+// whatever evaluateAlarms() last computed.
 static void updateBuzzerPulse() {
-  if (beepOnMs == 0) {
+  if (buzzerSilent) {
     setBuzzerOn(false);
-  } else if (beepOnMs >= BUZZER_BEEP_PERIOD_MS) {
-    setBuzzerOn(true);
-  } else {
-    setBuzzerOn((millis() % BUZZER_BEEP_PERIOD_MS) < beepOnMs);
+    pulseOn = false;
+    return;
   }
+  if (buzzerContinuous) {
+    setBuzzerOn(true);
+    pulseOn = true;
+    return;
+  }
+  unsigned long now = millis();
+  if (pulseOn && now - pulseChangeMs >= beepOnMs) {
+    pulseOn = false;
+    pulseChangeMs = now;
+  } else if (!pulseOn && now - pulseChangeMs >= beepOffMs) {
+    pulseOn = true;
+    pulseChangeMs = now;
+  }
+  setBuzzerOn(pulseOn);
 }
 
-// Maps how close a beacon is to the global alarm threshold onto how long
-// the buzzer stays on within each BUZZER_BEEP_PERIOD_MS cycle: 0 (silent)
-// at/below rampStartRssi, the full period (continuous tone) at/past
-// globalThresholdRssi, ramping from a short chirp (beepMinOnMs) in between.
-// rampStartRssi/globalThresholdRssi/beepMinOnMs come from Supabase --
-// see fetchBeaconSettings().
-static unsigned long rssiToBeepOnMs(int rssi) {
-  if (rssi <= rampStartRssi) return 0;
-  if (rssi >= globalThresholdRssi || globalThresholdRssi <= rampStartRssi) return BUZZER_BEEP_PERIOD_MS;
+// Maps how close a beacon is to the global alarm threshold onto a pulse
+// pattern: silent at/below rampStartRssi, continuous at/past
+// globalThresholdRssi, and pulsing with a fixed on-length
+// (BUZZER_PULSE_ON_MS, always the same) and a gap that shrinks from
+// beepMaxGapMs down toward 0 in between -- the gap shrinking is what makes
+// it sound faster/more urgent, not the pulse getting longer.
+// Caller must already hold stateMutex (reads rampStartRssi/
+// globalThresholdRssi/beepMaxGapMs).
+static void rssiToBeepTiming(int rssi, bool* silent, bool* continuous, unsigned long* onMs, unsigned long* offMs) {
+  if (rssi <= rampStartRssi) {
+    *silent = true; *continuous = false; *onMs = 0; *offMs = 0;
+    return;
+  }
+  if (rssi >= globalThresholdRssi || globalThresholdRssi <= rampStartRssi) {
+    *silent = false; *continuous = true; *onMs = 0; *offMs = 0;
+    return;
+  }
   float t = (float)(rssi - rampStartRssi) / (float)(globalThresholdRssi - rampStartRssi);
-  return beepMinOnMs + (unsigned long)(t * (BUZZER_BEEP_PERIOD_MS - beepMinOnMs));
+  *silent = false; *continuous = false;
+  *onMs = BUZZER_PULSE_ON_MS;
+  *offMs = (unsigned long)((1.0f - t) * beepMaxGapMs);
 }
 
 // ---------- Alarm evaluation ----------
+//
+// Runs on the main loop() task. Only computes state (buzzerSilent/
+// buzzerContinuous/beepOnMs/beepOffMs and each tool's pendingSync flag) --
+// never makes a network call itself, so it can never block updateBuzzerPulse().
+// Actual PATCH sending happens in syncPendingAlarms() on the network task.
 
 static void evaluateAlarms() {
-  unsigned long loudestOnMs = 0;
+  bool anyContinuous = false;
+  bool anyPulsing = false;
+  unsigned long mostUrgentOffMs = ULONG_MAX; // smaller = more urgent (faster repeat)
+  unsigned long mostUrgentOnMs = 0;
   unsigned long now = millis();
 
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
   for (int i = 0; i < toolCount; i++) {
     MonitoredTool& t = tools[i];
     // A beacon we haven't heard from recently is definitely not near the
@@ -355,13 +477,19 @@ static void evaluateAlarms() {
     int8_t effectiveRssi = recentlySeen ? t.currentRssi : -127;
     bool nearDoor = effectiveRssi > globalThresholdRssi;
     bool shouldAlarm = t.isAvailable && nearDoor;
-    unsigned long onMs = t.isAvailable ? rssiToBeepOnMs(effectiveRssi) : 0;
+
+    bool silent, continuous;
+    unsigned long onMs, offMs;
+    if (t.isAvailable) {
+      rssiToBeepTiming(effectiveRssi, &silent, &continuous, &onMs, &offMs);
+    } else {
+      silent = true; continuous = false; onMs = 0; offMs = 0;
+    }
 
     if (recentlySeen) {
-      const char* beepDesc = onMs == 0 ? "silent"
-        : onMs >= BUZZER_BEEP_PERIOD_MS ? "continuous" : "pulsing";
-      Serial.printf("%s: rssi=%d threshold=%d %s (on=%lums/%dms)%s\n", t.name, effectiveRssi, globalThresholdRssi,
-                    beepDesc, onMs, BUZZER_BEEP_PERIOD_MS, shouldAlarm ? " -- ALARM" : "");
+      const char* beepDesc = silent ? "silent" : continuous ? "continuous" : "pulsing";
+      Serial.printf("%s: rssi=%d threshold=%d %s (on=%lums off=%lums)%s\n", t.name, effectiveRssi, globalThresholdRssi,
+                    beepDesc, onMs, offMs, shouldAlarm ? " -- ALARM" : "");
     } else {
       Serial.printf("%s: rssi=n/a (not seen recently) threshold=%d\n", t.name, globalThresholdRssi);
     }
@@ -370,16 +498,56 @@ static void evaluateAlarms() {
       t.alarmActive = shouldAlarm;
       t.pendingSync = true;
     }
-    if (onMs > loudestOnMs) loudestOnMs = onMs;
-  }
 
-  beepOnMs = loudestOnMs;
-
-  for (int i = 0; i < toolCount; i++) {
-    if (tools[i].pendingSync) {
-      supabasePatchAlarm(tools[i]);
-      tools[i].pendingSync = false;
+    if (continuous) {
+      anyContinuous = true;
+    } else if (!silent) {
+      anyPulsing = true;
+      if (offMs < mostUrgentOffMs) {
+        mostUrgentOffMs = offMs;
+        mostUrgentOnMs = onMs;
+      }
     }
+  }
+  xSemaphoreGive(stateMutex);
+
+  buzzerContinuous = anyContinuous;
+  buzzerSilent = !anyContinuous && !anyPulsing;
+  if (!anyContinuous && anyPulsing) {
+    beepOnMs = mostUrgentOnMs;
+    beepOffMs = mostUrgentOffMs;
+  }
+}
+
+// ---------- Network task ----------
+//
+// All WiFi/Supabase work happens here, on its own task pinned to core 0 --
+// separate from the default Arduino loop() task (core 1), so a slow HTTPS
+// request never delays evaluateAlarms()/updateBuzzerPulse() and the
+// buzzer/LED cadence stays smooth regardless of network timing.
+
+static void networkTask(void* param) {
+  connectWiFi();
+
+  unsigned long lastFetchMs = millis();
+  fetchBeaconSettings();
+  fetchTools();
+
+  for (;;) {
+    if (WiFi.status() != WL_CONNECTED) {
+      connectWiFi();
+    }
+
+    unsigned long now = millis();
+    if (now - lastFetchMs >= TOOL_FETCH_INTERVAL_MS) {
+      fetchBeaconSettings();
+      fetchTools();
+      lastFetchMs = now;
+    }
+
+    syncPendingAlarms();
+
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 
@@ -389,31 +557,33 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
-  initBuzzer();
-  connectWiFi();
-  startBleScan();
+  stateMutex = xSemaphoreCreateMutex();
 
-  fetchBeaconSettings();
-  fetchTools();
-  lastFetchMs = millis();
+  initBuzzer();
+  startBleScan();
+  lastScanRestartMs = millis();
+
+  xTaskCreatePinnedToCore(networkTask, "networkTask", 8192, nullptr, 1, nullptr, 0);
 }
 
 void loop() {
   unsigned long now = millis();
-
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
-  }
-
-  if (now - lastFetchMs >= TOOL_FETCH_INTERVAL_MS) {
-    fetchBeaconSettings();
-    fetchTools();
-    lastFetchMs = now;
-  }
+  static unsigned long lastEvalMs = 0;
 
   if (now - lastEvalMs >= ALARM_EVAL_INTERVAL_MS) {
     evaluateAlarms();
     lastEvalMs = now;
+  }
+
+  // A long-running continuous BLE scan can occasionally get into a
+  // degraded state (worse with WiFi sharing the same radio) where it
+  // takes far longer than expected to pick a beacon back up after a
+  // signal gap. Restarting periodically is a cheap safety net against
+  // that -- takes milliseconds, bounds how long any such stall can last.
+  if (now - lastScanRestartMs >= SCAN_RESTART_INTERVAL_MS) {
+    bleScan->stop();
+    bleScan->start(0);
+    lastScanRestartMs = now;
   }
 
   updateBuzzerPulse(); // every iteration, unthrottled -- pulses can be as short as a few ms
