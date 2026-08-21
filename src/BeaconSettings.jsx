@@ -118,7 +118,7 @@ function BeaconSettings({ onHome }) {
           <input
             type="range"
             min="0"
-            max="1000"
+            max="2000"
             value={beepMs}
             onChange={(e) => setBeepMs(Number(e.target.value))}
             style={{ width: '100%' }}

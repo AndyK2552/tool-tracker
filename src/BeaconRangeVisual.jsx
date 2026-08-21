@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { colors } from './theme';
 
 const VIEW_W = 320;
+const VIEW_MIN_Y = -24; // headroom above the antenna's base so the icon isn't clipped
 const VIEW_H = 220;
 const ANTENNA_X = VIEW_W / 2;
-const ANTENNA_Y = 12;
-const MAX_RADIUS = 195;
+const ANTENNA_Y = 12; // also the radius origin for both rings
+const MAX_RADIUS = 175;
 
 // Distance from the antenna is inversely related to % (0% = -90 dBm = the
 // loosest threshold = detects from farthest away = the biggest ring; 100% =
@@ -38,7 +39,8 @@ function BeaconRangeVisual({ warningPct, thresholdPct, warningRssi, thresholdRss
       const rect = svg.getBoundingClientRect();
       const scale = rect.height / VIEW_H;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const radius = (clientY - rect.top) / scale - ANTENNA_Y;
+      const svgY = (clientY - rect.top) / scale + VIEW_MIN_Y;
+      const radius = svgY - ANTENNA_Y;
       const pct = radiusToPct(radius);
       if (dragging === 'warning') onWarningChange(pct);
       else onThresholdChange(pct);
@@ -66,10 +68,10 @@ function BeaconRangeVisual({ warningPct, thresholdPct, warningRssi, thresholdRss
     <div>
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        viewBox={`0 ${VIEW_MIN_Y} ${VIEW_W} ${VIEW_H}`}
         style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'none' }}
       >
-        <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill={colors.navyLight} rx="8" />
+        <rect x="0" y={VIEW_MIN_Y} width={VIEW_W} height={VIEW_H} fill={colors.navyLight} rx="8" />
 
         {/* Warning zone -- everything out to warningRadius */}
         <circle cx={ANTENNA_X} cy={ANTENNA_Y} r={warningRadius} fill="#F5D76E" fillOpacity="0.35" stroke="#F5D76E" strokeOpacity="0.7" strokeDasharray="4 3" />
@@ -77,7 +79,13 @@ function BeaconRangeVisual({ warningPct, thresholdPct, warningRssi, thresholdRss
         {/* Threshold zone drawn on top -- covers the inner region in red, leaving the yellow ring visible between the two */}
         <circle cx={ANTENNA_X} cy={ANTENNA_Y} r={thresholdRadius} fill="#ff8080" fillOpacity="0.55" stroke="#ff8080" strokeOpacity="0.85" />
 
-        <text x={ANTENNA_X} y={ANTENNA_Y + 8} fontSize="22" textAnchor="middle">📡</text>
+        {/* Rubber-duck whip antenna icon: base connector + elbow + rod */}
+        <g transform={`translate(${ANTENNA_X}, ${ANTENNA_Y})`}>
+          <rect x="-4" y="-6" width="8" height="7" rx="1.5" fill="#1f1f1f" />
+          <circle cx="0" cy="-6" r="3.5" fill="#2a2a2a" />
+          <rect x="-2.2" y="-28" width="4.4" height="23" rx="2.2" fill="#2a2a2a" />
+          <rect x="-2.2" y="-28" width="1.4" height="23" rx="0.7" fill="#3f3f3f" />
+        </g>
 
         <g transform={`translate(${ANTENNA_X}, ${ANTENNA_Y + warningRadius})`} {...handleProps('warning')}>
           <circle r="10" fill={colors.navy} stroke="#F5D76E" strokeWidth="3" />
