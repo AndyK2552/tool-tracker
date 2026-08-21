@@ -13,7 +13,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const OFFLINE_THRESHOLD_MINUTES = 10;
+const OFFLINE_THRESHOLD_MINUTES = 15;
 
 Deno.serve(async () => {
   const supabase = createClient(
@@ -23,12 +23,16 @@ Deno.serve(async () => {
 
   const { data: settings, error: settingsError } = await supabase
     .from('beacon_settings')
-    .select('board_last_seen, offline_alert_sent')
+    .select('board_last_seen, offline_alert_sent, offline_alerts_enabled')
     .eq('id', true)
     .single();
 
   if (settingsError || !settings) {
     return Response.json({ error: settingsError?.message || 'beacon_settings row not found' }, { status: 500 });
+  }
+
+  if (!settings.offline_alerts_enabled) {
+    return Response.json({ status: 'offline alerts are muted, nothing to check' });
   }
 
   if (!settings.board_last_seen) {

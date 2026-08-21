@@ -202,7 +202,10 @@ status line, refreshed every 30s, using the same `board_last_seen`
 column — that one's driven straight from the app, no extra setup needed.
 The email alert needs its own one-time setup (a Resend account for sending
 mail, the Edge Function deployed, and a cron job registered) — see
-[`../supabase/functions/README.md`](../supabase/functions/README.md).
+[`../supabase/functions/README.md`](../supabase/functions/README.md). WiFi
+Settings has an "Email admins if the Beacon Tower goes offline" checkbox to
+mute the alert temporarily (e.g. while installing or servicing it, when
+network drops are expected) without touching any of that setup.
 
 ## Behavior summary
 
