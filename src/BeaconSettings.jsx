@@ -118,7 +118,7 @@ function BeaconSettings({ onHome, onWifiSettings }) {
 
         <div style={sliderRowStyle}>
           <label style={sliderLabelStyle}>
-            Beep Frequency: <span style={sliderValueStyle}>{beepMs} ms</span>
+            Chirp Frequency: <span style={sliderValueStyle}>{beepMs} ms</span>
           </label>
           <input
             type="range"

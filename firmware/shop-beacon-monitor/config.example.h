@@ -36,7 +36,7 @@
 #define BUZZER_FREQUENCY_HZ 2500
 
 // Warning distance, threshold distance, and the max gap between chirps
-// (the app's "Beep Frequency" slider) are all set from the app's Beacon
+// (the app's "Chirp Frequency" slider) are all set from the app's Beacon
 // Settings page (Supabase beacon_settings table), not here -- see
 // fetchBeaconSettings() in the sketch. Only the buzzer's fixed mechanics
 // stay compile-time:

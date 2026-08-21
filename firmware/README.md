@@ -25,7 +25,7 @@ without reflashing.
 
 Three sliders control it:
 - **Warning Beep Distance** (0-100%) — where chirping starts.
-- **Beep Frequency** (0-1000ms) — the gap between chirps right at that
+- **Chirp Frequency** (0-1000ms) — the gap between chirps right at that
   starting point (each chirp itself is a fixed length, `BUZZER_PULSE_ON_MS`
   in the sketch, 100ms by default). The gap shrinks as the beacon gets
   closer, so it's the *rate* that speeds up, not the chirp length.
@@ -198,7 +198,7 @@ before relying on this.
 - The buzzer itself is more gradual: for each **Available** tool, it maps
   RSSI to a pulse pattern — silent at/below the warning distance, then
   pulsing at a fixed chirp length (`BUZZER_PULSE_ON_MS`) with a gap between
-  chirps (starting at the configured Beep Frequency) that shrinks as the
+  chirps (starting at the configured Chirp Frequency) that shrinks as the
   beacon gets closer, merging into a continuous tone once the gap hits
   zero at the threshold distance. It's the repeat rate that conveys
   proximity, not the chirp length — the board follows whichever watched

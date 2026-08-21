@@ -95,7 +95,7 @@ static int toolCount = 0;
 // Global beacon_settings, read from Supabase (see fetchBeaconSettings()).
 // These fallback values match the SQL migration's default row, used only
 // until the first successful fetch completes. Same locking rule as tools[].
-// beepMaxGapMs is the app's "Beep Frequency" slider (still named/stored as
+// beepMaxGapMs is the app's "Chirp Frequency" slider (still named/stored as
 // beep_duration_ms in Supabase) -- despite the historical name, it's the
 // GAP between chirps at the warning edge, not a duration: each chirp's
 // on-time is the fixed BUZZER_PULSE_ON_MS below, always. The gap shrinks
@@ -160,7 +160,7 @@ static void setProvisioningStatus(const char* msg) {
 
 class WifiProvisionCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override {
-    std::string value = pCharacteristic->getAttVal();
+    std::string value = pCharacteristic->getValue();
 
     JsonDocument doc;
     if (deserializeJson(doc, value)) {
