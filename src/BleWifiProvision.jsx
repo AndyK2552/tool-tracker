@@ -10,12 +10,12 @@ const STATUS_CHAR_UUID = '6f5c0003-8bde-4ea9-9c1a-3f6b1a2e9001';
 // Must match BLE_PROVISIONING_PIN in the board's config.h.
 const PROVISIONING_PIN = '482913';
 
-function BleWifiProvision() {
+function BleWifiProvision({ initialSsid = '', initialPassword = '' }) {
   const [supported] = useState(() => !!navigator.bluetooth);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [ssid, setSsid] = useState('');
-  const [password, setPassword] = useState('');
+  const [ssid, setSsid] = useState(initialSsid);
+  const [password, setPassword] = useState(initialPassword);
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState(null);
   const [sending, setSending] = useState(false);

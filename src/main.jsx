@@ -13,6 +13,7 @@ import ToolDetail from './ToolDetail.jsx'
 import ManageUsers from './ManageUsers.jsx'
 import UserDetail from './UserDetail.jsx'
 import BeaconSettings from './BeaconSettings.jsx'
+import WifiSettings from './WifiSettings.jsx'
 import { colors } from './theme'
 import { installGlobalCrashLogging, getLastCrash, clearLastCrash, logCrash } from './crashLog.js'
 import { useRegisterSW } from 'virtual:pwa-register/react'
@@ -257,7 +258,11 @@ function Root() {
   }
 
   if (view === 'beaconSettings') {
-    return <BeaconSettings onHome={() => setView('home')} />
+    return <BeaconSettings onHome={() => setView('home')} onWifiSettings={() => setView('wifiSettings')} />
+  }
+
+  if (view === 'wifiSettings') {
+    return <WifiSettings onBack={() => setView('beaconSettings')} onHome={() => setView('home')} />
   }
 
   const selectUser = (id) => {
