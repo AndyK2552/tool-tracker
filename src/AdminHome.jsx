@@ -1,4 +1,4 @@
-import { Camera, ClipboardList, Plus, Clock, Users } from 'lucide-react';
+import { Camera, ClipboardList, Plus, Clock, Users, Radio } from 'lucide-react';
 import { formatTechName } from './techDisplay';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
@@ -38,6 +38,7 @@ function AdminHome({ onNavigate, techName, truckNumber }) {
     { key: 'admin', icon: Plus, label: 'Add new tool' },
     { key: 'history', icon: Clock, label: 'Checkout history' },
     { key: 'users', icon: Users, label: 'Manage users' },
+    { key: 'beaconSettings', icon: Radio, label: 'Beacon settings' },
   ];
 
   return (

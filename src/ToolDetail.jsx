@@ -21,7 +21,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [newLocation, setNewLocation] = useState('');
   const [assigningBeacon, setAssigningBeacon] = useState(false);
   const [newBeaconMac, setNewBeaconMac] = useState('');
-  const [newBeaconThreshold, setNewBeaconThreshold] = useState('');
   const [scanningBeaconMac, setScanningBeaconMac] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
@@ -261,7 +260,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
 
   const handleStartAssignBeacon = () => {
     setNewBeaconMac(tool.beacon_mac || '');
-    setNewBeaconThreshold(tool.beacon_rssi_threshold != null ? String(tool.beacon_rssi_threshold) : '-75');
     setMessage(null);
     setAssigningQr(false);
     setAssigningLocation(false);
@@ -274,7 +272,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningBeacon(false);
     setScanningBeaconMac(false);
     setNewBeaconMac('');
-    setNewBeaconThreshold('');
   };
 
   const handleSubmitBeacon = async () => {
@@ -284,17 +281,10 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
       return;
     }
 
-    const threshold = parseInt(newBeaconThreshold, 10);
-    if (isNaN(threshold) || threshold > 0) {
-      setMessage({ type: 'error', text: 'RSSI threshold must be a negative number (e.g. -75).' });
-      return;
-    }
-
     const { data, error } = await supabase
       .from('tools')
       .update({
         beacon_mac: trimmedMac ? trimmedMac.toUpperCase() : null,
-        beacon_rssi_threshold: threshold,
         beacon_alarm_active: false,
         beacon_last_seen: null,
       })
@@ -315,7 +305,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningBeacon(false);
     setScanningBeaconMac(false);
     setNewBeaconMac('');
-    setNewBeaconThreshold('');
     setMessage({ type: 'success', text: trimmedMac ? 'Beacon assigned.' : 'Beacon removed.' });
   };
 
@@ -600,7 +589,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Status:</strong> {status}</p>
           {tool.beacon_mac && (
             <p style={{ color: colors.textMuted }}>
-              <strong style={{ color: colors.white }}>Beacon:</strong> {tool.beacon_mac} (alarm above {tool.beacon_rssi_threshold} dBm)
+              <strong style={{ color: colors.white }}>Beacon:</strong> {tool.beacon_mac}
               {tool.beacon_alarm_active && (
                 <span style={{ color: '#ff8080', fontWeight: 'bold', marginLeft: '0.5rem' }}>⚠ Near door</span>
               )}
@@ -781,20 +770,8 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               {scanningBeaconMac && (
                 <div id="beacon-qr-reader" style={{ width: '100%', marginBottom: '0.75rem' }}></div>
               )}
-              <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
-                Alarm RSSI Threshold (dBm)
-              </label>
-              <input
-                type="number"
-                value={newBeaconThreshold}
-                onChange={(e) => setNewBeaconThreshold(e.target.value)}
-                placeholder="-75"
-                style={{
-                  width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.5rem', boxSizing: 'border-box',
-                }}
-              />
               <p style={{ fontSize: '0.8rem', color: colors.textMuted, marginTop: 0, marginBottom: '0.75rem' }}>
-                The board sits at the shop door. The buzzer sounds when this tool is Available and its beacon's signal rises above this threshold (stronger/less negative = closer to the door). Leave the MAC blank and submit to remove the beacon.
+                The board sits at the shop door and sounds the buzzer when this tool is Available and its beacon gets close. The alarm distance is set once for all tools in Beacon Settings, not per tool. Leave the MAC blank and submit to remove the beacon.
               </p>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button onClick={handleSubmitBeacon} style={btnStyle}>Submit</button>

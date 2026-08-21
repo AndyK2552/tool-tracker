@@ -12,6 +12,7 @@ import CheckoutHistory from './CheckoutHistory.jsx'
 import ToolDetail from './ToolDetail.jsx'
 import ManageUsers from './ManageUsers.jsx'
 import UserDetail from './UserDetail.jsx'
+import BeaconSettings from './BeaconSettings.jsx'
 import { colors } from './theme'
 import { installGlobalCrashLogging, getLastCrash, clearLastCrash, logCrash } from './crashLog.js'
 import { useRegisterSW } from 'virtual:pwa-register/react'
@@ -253,6 +254,10 @@ function Root() {
 
   if (view === 'admin') {
     return <AdminPage onHome={() => setView('home')} onSelectTool={selectTool} />
+  }
+
+  if (view === 'beaconSettings') {
+    return <BeaconSettings onHome={() => setView('home')} />
   }
 
   const selectUser = (id) => {

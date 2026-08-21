@@ -18,7 +18,6 @@ function AdminPage({ onHome, onSelectTool }) {
   const [assigningQr, setAssigningQr] = useState(false);
   const [qrCode, setQrCode] = useState('');
   const [beaconMac, setBeaconMac] = useState('');
-  const [beaconThreshold, setBeaconThreshold] = useState('-75');
   const [scanningBeaconMac, setScanningBeaconMac] = useState(false);
   const scannerRef = useRef(null);
   const qrPanelRef = useRef(null);
@@ -162,12 +161,6 @@ function AdminPage({ onHome, onSelectTool }) {
       return;
     }
 
-    const parsedThreshold = parseInt(beaconThreshold, 10);
-    if (trimmedBeaconMac && (isNaN(parsedThreshold) || parsedThreshold > 0)) {
-      setMessage({ type: 'error', text: 'RSSI threshold must be a negative number (e.g. -75).' });
-      return;
-    }
-
     setSaving(true);
 
     let imageUrl;
@@ -190,7 +183,6 @@ function AdminPage({ onHome, onSelectTool }) {
         is_checked_out: false,
         condition: 'Ready',
         beacon_mac: trimmedBeaconMac ? trimmedBeaconMac.toUpperCase() : null,
-        beacon_rssi_threshold: trimmedBeaconMac ? parsedThreshold : -75,
       });
 
     if (error) {
@@ -230,7 +222,6 @@ function AdminPage({ onHome, onSelectTool }) {
     setToolPhoto(null);
     setQrCode('');
     setBeaconMac('');
-    setBeaconThreshold('-75');
     setSaving(false);
   };
 
@@ -417,16 +408,8 @@ function AdminPage({ onHome, onSelectTool }) {
                 Scan Beacon QR Code
               </button>
             )}
-            <label style={fieldLabelStyle}>Alarm RSSI Threshold (dBm)</label>
-            <input
-              type="number"
-              value={beaconThreshold}
-              onChange={(e) => setBeaconThreshold(e.target.value)}
-              placeholder="-75"
-              style={{ ...inputStyle, marginBottom: '0.35rem' }}
-            />
-            <p style={{ fontSize: '0.8rem', color: colors.textMuted, margin: 0 }}>
-              Only used if a beacon MAC is set above. The buzzer sounds at the shop door when this tool is Available and its beacon's signal rises above this threshold.
+            <p style={{ fontSize: '0.8rem', color: colors.textMuted, margin: '0.5rem 0 0' }}>
+              The buzzer sounds at the shop door when this tool is Available and its beacon gets close. Alarm distance is set once for all tools in Beacon Settings, not per tool.
             </p>
           </div>
 

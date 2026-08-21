@@ -2,12 +2,17 @@
 //
 // Mount this board at the shop door/exit. It continuously BLE-scans for
 // BlueCharm beacons attached to Shop tools, and periodically polls Supabase
-// for each watched tool's status and alarm threshold. If a tool is
-// "Available" (not checked out, not Pending/Damaged) and its beacon's RSSI
-// rises above the tool's configured threshold -- i.e. the tool is being
-// carried near the door -- the buzzer sounds. It goes quiet again once the
-// beacon moves back away from the door, or once the tool is checked out in
-// the app (status no longer Available).
+// for each watched tool's status, plus one global beacon_settings row (set
+// from the app's Beacon Settings page, applies to every tool). If a tool is
+// "Available" (not checked out, not Pending/Damaged), the buzzer starts
+// chirping once its beacon's RSSI rises above the configured warning
+// distance -- short, sparse chirps at first, getting longer/more frequent
+// as the beacon gets closer, merging into a continuous tone at the
+// configured threshold distance -- i.e. the tool being carried toward the
+// door sounds increasingly urgent as it approaches. It goes quiet again
+// once the beacon moves back away from the door, or once the tool is
+// checked out in the app (status no longer Available). Settings changes
+// take effect on the board's next poll, no reflashing needed.
 //
 // The beacon's motion sensor isn't wired to this board directly -- BlueCharm
 // beacons with a motion sensor typically switch to faster BLE advertising
@@ -25,7 +30,8 @@
 //   1. Copy config.example.h to config.h and fill in WiFi + Supabase details.
 //   2. In the Tool Tracker app, open each Shop tool -> Assign Beacon, and
 //      enter the beacon's MAC address (find it with a BLE scanner app like
-//      nRF Connect) and an RSSI alarm threshold (start with -75).
+//      nRF Connect). No per-tool threshold anymore -- that's now set once
+//      for all tools in the app's Beacon Settings page (admin only).
 //   3. Flash this sketch to the ESP32-S3.
 
 #include <WiFi.h>
@@ -34,6 +40,7 @@
 #include <ArduinoJson.h>
 #include <NimBLEDevice.h>
 #include <time.h>
+#include <math.h>
 
 #include "config.h"
 
@@ -43,7 +50,6 @@ struct MonitoredTool {
   char id[40];
   char name[64];
   char beaconMac[18];
-  int rssiThreshold;
   bool isAvailable;
   bool alarmActive;   // last alarm state we told Supabase about
   int8_t currentRssi;
@@ -55,8 +61,15 @@ struct MonitoredTool {
 static MonitoredTool tools[MAX_TOOLS];
 static int toolCount = 0;
 
+// Global beacon_settings, read from Supabase (see fetchBeaconSettings()).
+// These fallback values match the SQL migration's default row, used only
+// until the first successful fetch completes.
+static int rampStartRssi = -70;
+static int globalThresholdRssi = -50;
+static unsigned long beepMinOnMs = 5;
+
 static NimBLEScan* bleScan = nullptr;
-static bool buzzerOn = false;
+static uint8_t buzzerDuty = 0;
 static unsigned long lastFetchMs = 0;
 static unsigned long lastEvalMs = 0;
 
@@ -140,13 +153,17 @@ static bool supabaseGet(const String& path, JsonDocument& doc) {
 
   String url = String(SUPABASE_URL) + path;
   http.begin(client, url);
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+  http.addHeader("apikey", SUPABASE_SERVICE_ROLE_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_ROLE_KEY);
 
   int code = http.GET();
   bool ok = false;
   if (code == 200) {
-    DeserializationError err = deserializeJson(doc, http.getStream());
+    // Supabase responses are often chunked-transfer-encoded; getStream()
+    // exposes the raw chunked bytes, which corrupts ArduinoJson's parse.
+    // getString() de-chunks it properly, so parse from that instead.
+    String body = http.getString();
+    DeserializationError err = deserializeJson(doc, body);
     ok = !err;
     if (err) Serial.printf("Supabase GET: JSON parse failed: %s\n", err.c_str());
   } else {
@@ -163,8 +180,8 @@ static void supabasePatchAlarm(MonitoredTool& tool) {
 
   String url = String(SUPABASE_URL) + "/rest/v1/tools?id=eq." + String(tool.id);
   http.begin(client, url);
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+  http.addHeader("apikey", SUPABASE_SERVICE_ROLE_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_ROLE_KEY);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Prefer", "return=minimal");
 
@@ -184,14 +201,39 @@ static void supabasePatchAlarm(MonitoredTool& tool) {
   http.end();
 }
 
-static void fetchTools() {
+// 0% = -90 dBm (loosest/farthest trigger), 100% = -30 dBm (strictest/
+// closest) -- must match the app's BeaconSettings.jsx pctToRssi().
+static int pctToRssi(int pct) {
+  return (int)round(-90.0 + pct * 0.6);
+}
+
+static void fetchBeaconSettings() {
   JsonDocument doc;
-  String path = "/rest/v1/tools?location=eq.Shop&beacon_mac=not.is.null"
-                "&select=id,name,beacon_mac,beacon_rssi_threshold,is_checked_out,condition,beacon_alarm_active";
+  String path = "/rest/v1/beacon_settings?select=warning_beep_distance_pct,beep_duration_ms,threshold_distance_pct";
   if (!supabaseGet(path, doc)) return;
 
   JsonArray arr = doc.as<JsonArray>();
-  MonitoredTool updated[MAX_TOOLS];
+  if (arr.size() == 0) return;
+  JsonObject row = arr[0];
+
+  int warningPct = row["warning_beep_distance_pct"] | 33;
+  int thresholdPct = row["threshold_distance_pct"] | 67;
+  beepMinOnMs = row["beep_duration_ms"] | 5;
+  rampStartRssi = pctToRssi(warningPct);
+  globalThresholdRssi = pctToRssi(thresholdPct);
+
+  Serial.printf("Beacon settings: warning=%d%% (%d dBm) beep=%lums threshold=%d%% (%d dBm)\n",
+    warningPct, rampStartRssi, beepMinOnMs, thresholdPct, globalThresholdRssi);
+}
+
+static void fetchTools() {
+  JsonDocument doc;
+  String path = "/rest/v1/tools?location=eq.Shop&beacon_mac=not.is.null"
+                "&select=id,name,beacon_mac,is_checked_out,condition,beacon_alarm_active";
+  if (!supabaseGet(path, doc)) return;
+
+  JsonArray arr = doc.as<JsonArray>();
+  static MonitoredTool updated[MAX_TOOLS]; // static: keep this ~5.6KB array off the loop task's stack
   int updatedCount = 0;
 
   for (JsonObject row : arr) {
@@ -204,7 +246,6 @@ static void fetchTools() {
     strncpy(t.name, row["name"] | "", sizeof(t.name) - 1);
     strncpy(t.beaconMac, mac, sizeof(t.beaconMac) - 1);
     for (size_t i = 0; t.beaconMac[i]; i++) t.beaconMac[i] = toupper(t.beaconMac[i]);
-    t.rssiThreshold = row["beacon_rssi_threshold"] | -75;
 
     bool isCheckedOut = row["is_checked_out"] | false;
     const char* condition = row["condition"] | "Ready";
@@ -229,26 +270,71 @@ static void fetchTools() {
 
   memcpy(tools, updated, sizeof(MonitoredTool) * updatedCount);
   toolCount = updatedCount;
+
+  Serial.printf("Fetched %d Shop tool(s) with a beacon assigned:\n", toolCount);
+  for (int i = 0; i < toolCount; i++) {
+    Serial.printf("  - %s (%s): beacon=%s available=%s\n",
+      tools[i].name, tools[i].id, tools[i].beaconMac,
+      tools[i].isAvailable ? "yes" : "no");
+  }
 }
 
 // ---------- Buzzer ----------
+//
+// Volume via PWM duty cycle doesn't work reliably on resonant piezo buzzer
+// modules -- they tend to just be on or off regardless of instantaneous
+// duty. Instead, urgency is conveyed via pulse rate: short chirps that get
+// longer/more frequent as the beacon approaches, merging into a continuous
+// tone right at the threshold -- the same idea as a parking-sensor beeper.
+//
+// beepOnMs is recomputed once per evaluateAlarms() cycle (~1s) from
+// whichever watched tool is closest to alarming; updateBuzzerPulse() reads
+// it every loop() iteration (no delay()) to do the actual fast on/off
+// toggling, since a 5ms pulse needs finer timing than the 1s eval cadence.
 
-static void setBuzzer(bool on) {
-  if (on == buzzerOn) return;
-  buzzerOn = on;
-  if (on) {
-    ledcAttach(BUZZER_PIN, BUZZER_FREQUENCY_HZ, 8);
-    ledcWriteTone(BUZZER_PIN, BUZZER_FREQUENCY_HZ);
+static unsigned long beepOnMs = 0;
+
+static void initBuzzer() {
+  ledcAttach(BUZZER_PIN, BUZZER_FREQUENCY_HZ, 8);
+  ledcWrite(BUZZER_PIN, 0);
+}
+
+static void setBuzzerOn(bool on) {
+  uint8_t duty = on ? BUZZER_MAX_DUTY : 0;
+  if (duty == buzzerDuty) return;
+  buzzerDuty = duty;
+  ledcWrite(BUZZER_PIN, duty);
+}
+
+// Call every loop() iteration -- does the actual pulsing based on the
+// beepOnMs target that evaluateAlarms() last computed.
+static void updateBuzzerPulse() {
+  if (beepOnMs == 0) {
+    setBuzzerOn(false);
+  } else if (beepOnMs >= BUZZER_BEEP_PERIOD_MS) {
+    setBuzzerOn(true);
   } else {
-    ledcWriteTone(BUZZER_PIN, 0);
-    ledcDetach(BUZZER_PIN);
+    setBuzzerOn((millis() % BUZZER_BEEP_PERIOD_MS) < beepOnMs);
   }
+}
+
+// Maps how close a beacon is to the global alarm threshold onto how long
+// the buzzer stays on within each BUZZER_BEEP_PERIOD_MS cycle: 0 (silent)
+// at/below rampStartRssi, the full period (continuous tone) at/past
+// globalThresholdRssi, ramping from a short chirp (beepMinOnMs) in between.
+// rampStartRssi/globalThresholdRssi/beepMinOnMs come from Supabase --
+// see fetchBeaconSettings().
+static unsigned long rssiToBeepOnMs(int rssi) {
+  if (rssi <= rampStartRssi) return 0;
+  if (rssi >= globalThresholdRssi || globalThresholdRssi <= rampStartRssi) return BUZZER_BEEP_PERIOD_MS;
+  float t = (float)(rssi - rampStartRssi) / (float)(globalThresholdRssi - rampStartRssi);
+  return beepMinOnMs + (unsigned long)(t * (BUZZER_BEEP_PERIOD_MS - beepMinOnMs));
 }
 
 // ---------- Alarm evaluation ----------
 
 static void evaluateAlarms() {
-  bool anyAlarm = false;
+  unsigned long loudestOnMs = 0;
   unsigned long now = millis();
 
   for (int i = 0; i < toolCount; i++) {
@@ -257,19 +343,27 @@ static void evaluateAlarms() {
     // door -- -127 sentinel keeps it below any realistic threshold.
     bool recentlySeen = t.everSeen && (now - t.lastSeenMs) < BEACON_STALE_MS;
     int8_t effectiveRssi = recentlySeen ? t.currentRssi : -127;
-    bool nearDoor = effectiveRssi > t.rssiThreshold;
+    bool nearDoor = effectiveRssi > globalThresholdRssi;
     bool shouldAlarm = t.isAvailable && nearDoor;
+    unsigned long onMs = t.isAvailable ? rssiToBeepOnMs(effectiveRssi) : 0;
+
+    if (recentlySeen) {
+      const char* beepDesc = onMs == 0 ? "silent"
+        : onMs >= BUZZER_BEEP_PERIOD_MS ? "continuous" : "pulsing";
+      Serial.printf("%s: rssi=%d threshold=%d %s (on=%lums/%dms)%s\n", t.name, effectiveRssi, globalThresholdRssi,
+                    beepDesc, onMs, BUZZER_BEEP_PERIOD_MS, shouldAlarm ? " -- ALARM" : "");
+    } else {
+      Serial.printf("%s: rssi=n/a (not seen recently) threshold=%d\n", t.name, globalThresholdRssi);
+    }
 
     if (shouldAlarm != t.alarmActive) {
       t.alarmActive = shouldAlarm;
       t.pendingSync = true;
-      Serial.printf("%s: %s (rssi=%d, threshold=%d)\n", t.name,
-                    shouldAlarm ? "ALARM - near door" : "clear", effectiveRssi, t.rssiThreshold);
     }
-    if (shouldAlarm) anyAlarm = true;
+    if (onMs > loudestOnMs) loudestOnMs = onMs;
   }
 
-  setBuzzer(anyAlarm);
+  beepOnMs = loudestOnMs;
 
   for (int i = 0; i < toolCount; i++) {
     if (tools[i].pendingSync) {
@@ -285,9 +379,11 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
+  initBuzzer();
   connectWiFi();
   startBleScan();
 
+  fetchBeaconSettings();
   fetchTools();
   lastFetchMs = millis();
 }
@@ -300,6 +396,7 @@ void loop() {
   }
 
   if (now - lastFetchMs >= TOOL_FETCH_INTERVAL_MS) {
+    fetchBeaconSettings();
     fetchTools();
     lastFetchMs = now;
   }
@@ -308,4 +405,6 @@ void loop() {
     evaluateAlarms();
     lastEvalMs = now;
   }
+
+  updateBuzzerPulse(); // every iteration, unthrottled -- pulses can be as short as a few ms
 }

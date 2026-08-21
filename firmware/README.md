@@ -15,12 +15,27 @@ need one board per tool.
 
 BlueCharm beacons don't report distance directly — the firmware watches
 **RSSI** (received signal strength) instead, which is far more reliable in
-practice than converting to meters. Each tool gets its own RSSI threshold
-(default `-75` dBm) that you tune based on your door/shop layout: carry the
-tool's beacon past the board at the door, watch the Serial Monitor log the
-RSSI as it peaks, and set the threshold a bit below that peak so it reliably
-triggers. More negative = weaker signal = farther away, so the alarm fires
-when RSSI rises *above* the threshold (i.e. the beacon gets close).
+practice than converting to meters. Unlike an earlier version of this
+firmware, the RSSI thresholds aren't per-tool anymore — they're set **once,
+for every tool**, from the app's **Beacon Settings** page (Home → Beacon
+Settings, admin only), which writes to a single-row `beacon_settings` table
+the board polls every ~5s. That means you can retune the alarm distance and
+chirp behavior live from your phone while watching the Serial Monitor,
+without reflashing.
+
+Three sliders control it:
+- **Warning Beep Distance** (0-100%) — where chirping starts.
+- **Beep Frequency** (1-100ms) — length of the shortest chirp, right at that
+  starting point.
+- **Threshold Distance** (0-100%) — where it becomes a continuous tone; this
+  is also what's written back to Supabase as the "⚠ Near door" alarm state.
+  Can't be set to trigger farther out than Warning Beep Distance — the app
+  clamps Warning Beep Distance down to match if you try.
+
+Both distance sliders map to RSSI via `rssi = -90 + pct * 0.6` — 0% is -90
+dBm (loosest, triggers from farthest away), 100% is -30 dBm (strictest,
+must be right up close). The firmware does the identical conversion in
+`fetchBeaconSettings()`.
 
 The beacon's onboard motion sensor isn't wired into this board at all — it's
 not needed for this logic. BlueCharm beacons with a motion sensor typically
@@ -68,8 +83,12 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
 4. Copy `shop-beacon-monitor/config.example.h` to
    `shop-beacon-monitor/config.h` and fill in:
    - Your shop WiFi SSID/password
-   - `SUPABASE_URL` / `SUPABASE_ANON_KEY` — same values as
-     `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in `tool-tracker/.env`
+   - `SUPABASE_URL` — same value as `VITE_SUPABASE_URL` in `tool-tracker/.env`
+   - `SUPABASE_SERVICE_ROLE_KEY` — **not** the anon key. The `tools`
+     table's RLS policies only allow `authenticated` access, so the board
+     needs the service_role key (Supabase → Project Settings → API Keys →
+     "service_role") to read/write it. This key bypasses RLS entirely —
+     treat it like a root password, never put it anywhere web-facing.
    - `BUZZER_PIN`
 5. Flash `shop-beacon-monitor.ino`.
 6. Open the Serial Monitor at 115200 baud to watch WiFi connection, RSSI
@@ -77,12 +96,16 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
 
 ## App-side setup
 
-1. Run [`sql/add_beacon_columns.sql`](../sql/add_beacon_columns.sql) once in
-   your Supabase SQL editor — adds `beacon_mac`, `beacon_rssi_threshold`,
-   `beacon_alarm_active`, and `beacon_last_seen` to the `tools` table.
+1. Run [`sql/add_beacon_columns.sql`](../sql/add_beacon_columns.sql) and
+   [`sql/add_beacon_settings_table.sql`](../sql/add_beacon_settings_table.sql)
+   once each in your Supabase SQL editor. The first adds `beacon_mac`,
+   `beacon_alarm_active`, and `beacon_last_seen` to the `tools` table; the
+   second adds the single-row `beacon_settings` table the board polls for
+   the warning/threshold/chirp values (admin-only to edit, via RLS).
 2. In the app, open a Shop tool as an admin and use **Assign Beacon** to
-   enter the beacon's MAC address and an RSSI alarm threshold. To find a
-   beacon's MAC, flash [`../ble-scanner/ble-scanner.ino`](../ble-scanner/ble-scanner.ino)
+   enter the beacon's MAC address (no per-tool threshold anymore — that's
+   set once for all tools on the Beacon Settings page). To find a beacon's
+   MAC, flash [`../ble-scanner/ble-scanner.ino`](../ble-scanner/ble-scanner.ino)
    to the ESP32-S3 temporarily and watch the Serial Monitor with the beacon
    nearby — it flags lines that look like iBeacons (BlueCharm's default
    advertising format) so it's easy to pick out. This is more reliable than
@@ -90,20 +113,31 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
    privacy, so nRF Connect and similar only work for this on Android. Once
    you've noted the MAC, re-flash `shop-beacon-monitor.ino` as the board's
    real firmware.
-3. Tools with an active door alarm show a "⚠ Near door" badge on the Tool
+3. Tune the three sliders on the app's **Beacon Settings** page (Home →
+   Beacon Settings) while watching the Serial Monitor — changes take effect
+   on the board's next poll, no reflashing needed.
+4. Tools with an active door alarm show a "⚠ Near door" badge on the Tool
    Status list and detail page — the board writes that state back to
    Supabase whenever it changes.
 
 ## Behavior summary
 
-- Every ~5s the board polls Supabase for all Shop tools with a beacon
-  assigned: their checkout/condition status and alarm threshold.
+- Every ~5s the board polls Supabase for two things: all Shop tools with a
+  beacon assigned (their checkout/condition status), and the single global
+  `beacon_settings` row (warning distance, threshold distance, chirp
+  length).
 - It continuously BLE-scans in the background and tracks the latest RSSI
   seen for each known beacon MAC.
-- Every ~1s it re-evaluates: for each tool, alarm = **Available** AND the
-  beacon was heard from in the last 15s with RSSI stronger than (i.e.
-  numerically greater than) the threshold.
-- The buzzer sounds continuously while *any* watched tool is in that alarm
-  state, and stops once none are (beacon moves away from the door, or the
-  tool gets checked out).
-- Alarm state changes are written back to Supabase so the app reflects them.
+- Every ~1s it re-evaluates each tool. The app-facing "alarm" state (what
+  gets written to Supabase and shown as the "⚠ Near door" badge) is
+  **Available** AND the beacon was heard from in the last 15s with RSSI
+  stronger than (i.e. numerically greater than) the global threshold.
+- The buzzer itself is more gradual: for each **Available** tool, it maps
+  RSSI to a chirp pattern — silent at/below the warning distance, starting
+  with the configured shortest chirp once past that and getting
+  longer/more frequent as the beacon gets closer, merging into a
+  continuous tone at the threshold distance. The board follows whichever
+  watched tool is currently most urgent, and goes silent once none are
+  Available and in range.
+- Alarm state changes (the threshold-crossing, not the chirp ramp) are
+  written back to Supabase so the app reflects them.
