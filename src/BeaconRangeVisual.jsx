@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { RadioTower } from 'lucide-react';
 import { colors } from './theme';
 
 const VIEW_W = 320;
@@ -79,13 +80,8 @@ function BeaconRangeVisual({ warningPct, thresholdPct, warningRssi, thresholdRss
         {/* Threshold zone drawn on top -- covers the inner region in red, leaving the yellow ring visible between the two */}
         <circle cx={ANTENNA_X} cy={ANTENNA_Y} r={thresholdRadius} fill="#ff8080" fillOpacity="0.55" stroke="#ff8080" strokeOpacity="0.85" />
 
-        {/* Rubber-duck whip antenna icon: base connector + elbow + rod */}
-        <g transform={`translate(${ANTENNA_X}, ${ANTENNA_Y})`}>
-          <rect x="-4" y="-6" width="8" height="7" rx="1.5" fill="#1f1f1f" />
-          <circle cx="0" cy="-6" r="3.5" fill="#2a2a2a" />
-          <rect x="-2.2" y="-28" width="4.4" height="23" rx="2.2" fill="#2a2a2a" />
-          <rect x="-2.2" y="-28" width="1.4" height="23" rx="0.7" fill="#3f3f3f" />
-        </g>
+        {/* Same icon (lucide-react) and color used for icons everywhere else in the app */}
+        <RadioTower x={ANTENNA_X - 13} y={ANTENNA_Y - 26} size={26} color={colors.blueAccent} strokeWidth={2} />
 
         <g transform={`translate(${ANTENNA_X}, ${ANTENNA_Y + warningRadius})`} {...handleProps('warning')}>
           <circle r="10" fill={colors.navy} stroke="#F5D76E" strokeWidth="3" />
