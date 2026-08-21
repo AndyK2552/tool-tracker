@@ -250,7 +250,6 @@ class BeaconScanCallbacks : public NimBLEScanCallbacks {
 static BeaconScanCallbacks scanCallbacks;
 
 static void startBleScan() {
-  NimBLEDevice::init("ShopBeaconMonitor"); // named so it's identifiable in a BLE device picker (Web Bluetooth, nRF Connect, etc.)
   bleScan = NimBLEDevice::getScan();
   bleScan->setScanCallbacks(&scanCallbacks, true); // true = report every advertisement, not just the first
   bleScan->setActiveScan(true);
@@ -712,8 +711,16 @@ void setup() {
   stateMutex = xSemaphoreCreateMutex();
 
   initBuzzer();
-  startBleScan();
+
+  // Bring up the NimBLE host once, then register the GATT server (for BLE
+  // WiFi provisioning) *before* scanning starts. Registering GATT services
+  // while a scan is already active raced with the host stack's own HCI
+  // traffic and crashed with "assert failed: ble_svc_gap_init ... rc == 0"
+  // on boot -- doing the one-time server setup first, then starting the
+  // continuous scan, avoids that.
+  NimBLEDevice::init("ShopBeaconMonitor"); // named so it's identifiable in a BLE device picker (Web Bluetooth, nRF Connect, etc.)
   startBleProvisioning();
+  startBleScan();
   lastScanRestartMs = millis();
 
   xTaskCreatePinnedToCore(networkTask, "networkTask", 8192, nullptr, 1, nullptr, 0);
