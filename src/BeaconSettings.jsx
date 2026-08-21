@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import PageHeader from './PageHeader';
 import BeaconRangeVisual from './BeaconRangeVisual';
+import BleWifiProvision from './BleWifiProvision';
 import { colors, btnStyle } from './theme';
 
 // 0% = -90 dBm (loosest/farthest trigger), 100% = -30 dBm (strictest/closest).
@@ -11,6 +12,9 @@ function BeaconSettings({ onHome }) {
   const [warningPct, setWarningPct] = useState(33);
   const [beepMs, setBeepMs] = useState(5);
   const [thresholdPct, setThresholdPct] = useState(67);
+  const [wifiSsid, setWifiSsid] = useState('');
+  const [wifiPassword, setWifiPassword] = useState('');
+  const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -22,6 +26,8 @@ function BeaconSettings({ onHome }) {
         setWarningPct(data.warning_beep_distance_pct);
         setBeepMs(data.beep_duration_ms);
         setThresholdPct(data.threshold_distance_pct);
+        setWifiSsid(data.wifi_ssid || '');
+        setWifiPassword(data.wifi_password || '');
       }
       setLoading(false);
     };
@@ -41,6 +47,13 @@ function BeaconSettings({ onHome }) {
   };
 
   const handleSave = async () => {
+    const trimmedSsid = wifiSsid.trim();
+    const trimmedPassword = wifiPassword.trim();
+    if (!!trimmedSsid !== !!trimmedPassword) {
+      setMessage({ type: 'error', text: 'Enter both WiFi Network Name and Password, or leave both blank.' });
+      return;
+    }
+
     setSaving(true);
     setMessage(null);
 
@@ -50,6 +63,8 @@ function BeaconSettings({ onHome }) {
         warning_beep_distance_pct: warningPct,
         beep_duration_ms: beepMs,
         threshold_distance_pct: thresholdPct,
+        wifi_ssid: trimmedSsid || null,
+        wifi_password: trimmedPassword || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', true);
@@ -126,6 +141,48 @@ function BeaconSettings({ onHome }) {
           <p style={sliderHelpStyle}>
             Gap between chirps right as it crosses Warning Beep Distance (each chirp itself is a fixed length). The gap shrinks as it gets closer, until the chirps run together into a continuous tone.
           </p>
+        </div>
+
+        <div style={{ ...sliderRowStyle, paddingTop: '0.5rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+          <label style={sliderLabelStyle}>WiFi Network (board)</label>
+          <input
+            type="text"
+            value={wifiSsid}
+            onChange={(e) => setWifiSsid(e.target.value)}
+            placeholder="Network name (SSID)"
+            style={{
+              width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.5rem', boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showWifiPassword ? 'text' : 'password'}
+              value={wifiPassword}
+              onChange={(e) => setWifiPassword(e.target.value)}
+              placeholder="Password"
+              style={{
+                width: '100%', padding: '0.6rem', paddingRight: '3.5rem', borderRadius: '6px', border: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowWifiPassword((v) => !v)}
+              style={{
+                position: 'absolute', right: '0.4rem', top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', color: colors.navy, fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer', padding: '0.25rem',
+              }}
+            >
+              {showWifiPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          <p style={sliderHelpStyle}>
+            Lets you change the board's WiFi (e.g. switching providers) without reflashing. The board only picks this up the next time it needs to reconnect — if it's still connected to the old network, save this while it's online and it'll switch over automatically once that network goes away. If it's already offline with no way back, this alone won't reach it. Leave both fields blank to keep using what's programmed into the firmware.
+          </p>
+        </div>
+
+        <div style={{ ...sliderRowStyle, paddingTop: '0.5rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+          <label style={sliderLabelStyle}>Update WiFi via Bluetooth</label>
+          <BleWifiProvision />
         </div>
 
         <button onClick={handleSave} disabled={saving} style={btnStyle}>

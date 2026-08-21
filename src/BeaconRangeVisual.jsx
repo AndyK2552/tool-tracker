@@ -81,7 +81,7 @@ function BeaconRangeVisual({ warningPct, thresholdPct, warningRssi, thresholdRss
         <circle cx={ANTENNA_X} cy={ANTENNA_Y} r={thresholdRadius} fill="#ff8080" fillOpacity="0.55" stroke="#ff8080" strokeOpacity="0.85" />
 
         {/* Same icon (lucide-react) and color used for icons everywhere else in the app */}
-        <RadioTower x={ANTENNA_X - 13} y={ANTENNA_Y - 26} size={26} color={colors.blueAccent} strokeWidth={2} />
+        <RadioTower x={ANTENNA_X - 13} y={ANTENNA_Y - 26} size={26} color={colors.navy} strokeWidth={2} />
 
         <g transform={`translate(${ANTENNA_X}, ${ANTENNA_Y + warningRadius})`} {...handleProps('warning')}>
           <circle r="10" fill={colors.navy} stroke="#F5D76E" strokeWidth="3" />

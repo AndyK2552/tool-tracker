@@ -9,11 +9,16 @@
 -- threshold_distance_pct is where it becomes a continuous tone, and must
 -- be >= warning_beep_distance_pct (enforced in the app UI, not the DB).
 
+-- wifi_ssid/wifi_password let the board's WiFi network be changed without
+-- reflashing -- see fetchBeaconSettings() in shop-beacon-monitor.ino. Left
+-- blank/null, the board keeps using whatever's compiled into config.h.
 create table if not exists beacon_settings (
   id boolean primary key default true,
   warning_beep_distance_pct integer not null default 33 check (warning_beep_distance_pct between 0 and 100),
   beep_duration_ms integer not null default 5 check (beep_duration_ms between 0 and 2000),
   threshold_distance_pct integer not null default 67 check (threshold_distance_pct between 0 and 100),
+  wifi_ssid text,
+  wifi_password text,
   updated_at timestamptz not null default now()
 );
 
@@ -21,10 +26,13 @@ insert into beacon_settings (id) values (true) on conflict (id) do nothing;
 
 alter table beacon_settings enable row level security;
 
-create policy "Authenticated users can view beacon settings"
+-- Admin-only to SELECT (not just UPDATE) since this table holds the WiFi
+-- password -- a plain "authenticated" read policy would let any logged-in
+-- tech, not just admins, read it via the API.
+create policy "Admins can view beacon settings"
   on beacon_settings for select
   to authenticated
-  using (true);
+  using (exists (select 1 from profiles where profiles.id = auth.uid() and profiles.is_admin = true));
 
 create policy "Admins can update beacon settings"
   on beacon_settings for update

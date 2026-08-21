@@ -52,6 +52,7 @@
 #include <math.h>
 #include <limits.h>
 #include <FastLED.h>
+#include <Preferences.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
@@ -110,6 +111,105 @@ static NimBLEScan* bleScan = nullptr;
 static uint8_t buzzerDuty = 0;
 static unsigned long lastScanRestartMs = 0;
 
+// WiFi credentials the board actually connects with. Start from whatever's
+// cached in flash (from a previous Supabase override) or fall back to the
+// compiled-in config.h values; fetchBeaconSettings() can update these at
+// runtime so the network can be changed (e.g. switching providers) without
+// reflashing -- see loadWifiCredentials()/saveWifiCredentials(). Only ever
+// touched from networkTask(), so no mutex needed.
+static String effectiveSsid;
+static String effectivePassword;
+
+// ---------- BLE WiFi provisioning ----------
+//
+// Lets WiFi credentials be pushed to the board over Bluetooth even when it
+// has no working network at all (unlike the Supabase-based override above,
+// which needs the board online to fetch anything). The board runs both a
+// central role (scanning for tool beacons, unchanged) and a peripheral
+// role (this GATT server) at the same time -- NimBLE-Arduino supports both
+// concurrently, but this combination gets less real-world mileage than the
+// scan-only setup, so it's worth extra scrutiny on real hardware.
+//
+// The credentials characteristic is write-only and expects a JSON payload
+// {"ssid":"...","password":"...","pin":"..."} -- "pin" must match
+// BLE_PROVISIONING_PIN below, a basic shared-secret gate against literally
+// anyone in BLE range rewriting the board's network. It's not strong
+// cryptographic protection, just a deterrent against casual/accidental
+// writes from other BLE apps. The status characteristic is read+notify so
+// a connected client can see what happened after writing.
+#define BLE_PROVISION_SERVICE_UUID "6f5c0001-8bde-4ea9-9c1a-3f6b1a2e9001"
+#define BLE_PROVISION_CRED_CHAR_UUID "6f5c0002-8bde-4ea9-9c1a-3f6b1a2e9001"
+#define BLE_PROVISION_STATUS_CHAR_UUID "6f5c0003-8bde-4ea9-9c1a-3f6b1a2e9001"
+
+static NimBLECharacteristic* provisionStatusChar = nullptr;
+
+// Set by the credentials characteristic's write callback (BLE host task),
+// read/cleared by networkTask() -- guarded by stateMutex like everything
+// else shared across tasks.
+static bool bleProvisionRequested = false;
+static String pendingBleSsid;
+static String pendingBlePassword;
+
+static void setProvisioningStatus(const char* msg) {
+  Serial.print("BLE provisioning: ");
+  Serial.println(msg);
+  if (!provisionStatusChar) return;
+  provisionStatusChar->setValue(msg);
+  provisionStatusChar->notify();
+}
+
+class WifiProvisionCallbacks : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic* pCharacteristic, NimBLEConnInfo& connInfo) override {
+    std::string value = pCharacteristic->getAttVal();
+
+    JsonDocument doc;
+    if (deserializeJson(doc, value)) {
+      setProvisioningStatus("failed: malformed request");
+      return;
+    }
+
+    const char* pin = doc["pin"] | "";
+    if (strcmp(pin, BLE_PROVISIONING_PIN) != 0) {
+      setProvisioningStatus("failed: wrong pin");
+      return;
+    }
+
+    const char* ssid = doc["ssid"] | "";
+    if (!ssid[0]) {
+      setProvisioningStatus("failed: missing network name");
+      return;
+    }
+    const char* password = doc["password"] | "";
+
+    xSemaphoreTake(stateMutex, portMAX_DELAY);
+    pendingBleSsid = ssid;
+    pendingBlePassword = password;
+    bleProvisionRequested = true;
+    xSemaphoreGive(stateMutex);
+
+    setProvisioningStatus("received -- connecting...");
+  }
+};
+
+static WifiProvisionCallbacks provisionCallbacks;
+
+static void startBleProvisioning() {
+  NimBLEServer* server = NimBLEDevice::createServer();
+  NimBLEService* service = server->createService(BLE_PROVISION_SERVICE_UUID);
+
+  NimBLECharacteristic* credChar = service->createCharacteristic(BLE_PROVISION_CRED_CHAR_UUID, NIMBLE_PROPERTY::WRITE);
+  credChar->setCallbacks(&provisionCallbacks);
+
+  provisionStatusChar = service->createCharacteristic(BLE_PROVISION_STATUS_CHAR_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  provisionStatusChar->setValue("idle");
+
+  server->start();
+
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  advertising->addServiceUUID(BLE_PROVISION_SERVICE_UUID);
+  advertising->start();
+}
+
 // ---------- helpers ----------
 
 static void macToString(const NimBLEAddress& addr, char* out, size_t outLen) {
@@ -150,7 +250,7 @@ class BeaconScanCallbacks : public NimBLEScanCallbacks {
 static BeaconScanCallbacks scanCallbacks;
 
 static void startBleScan() {
-  NimBLEDevice::init("");
+  NimBLEDevice::init("ShopBeaconMonitor"); // named so it's identifiable in a BLE device picker (Web Bluetooth, nRF Connect, etc.)
   bleScan = NimBLEDevice::getScan();
   bleScan->setScanCallbacks(&scanCallbacks, true); // true = report every advertisement, not just the first
   bleScan->setActiveScan(true);
@@ -161,10 +261,29 @@ static void startBleScan() {
 
 // ---------- WiFi / time ----------
 
+// Call once at boot, before the first connectWiFi(). Loads a previously-
+// cached override if fetchBeaconSettings() has ever saved one, else falls
+// back to the config.h compile-time values.
+static void loadWifiCredentials() {
+  Preferences prefs;
+  prefs.begin("wifi", true); // read-only
+  effectiveSsid = prefs.getString("ssid", WIFI_SSID);
+  effectivePassword = prefs.getString("password", WIFI_PASSWORD);
+  prefs.end();
+}
+
+static void saveWifiCredentials(const String& ssid, const String& password) {
+  Preferences prefs;
+  prefs.begin("wifi", false); // read-write
+  prefs.putString("ssid", ssid);
+  prefs.putString("password", password);
+  prefs.end();
+}
+
 static void connectWiFi() {
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print("Connecting to WiFi");
+  WiFi.begin(effectiveSsid.c_str(), effectivePassword.c_str());
+  Serial.println("Connecting to WiFi (" + effectiveSsid + ")");
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) {
     delay(500);
@@ -254,7 +373,7 @@ static int pctToRssi(int pct) {
 
 static void fetchBeaconSettings() {
   JsonDocument doc;
-  String path = "/rest/v1/beacon_settings?select=warning_beep_distance_pct,beep_duration_ms,threshold_distance_pct";
+  String path = "/rest/v1/beacon_settings?select=warning_beep_distance_pct,beep_duration_ms,threshold_distance_pct,wifi_ssid,wifi_password";
   if (!supabaseGet(path, doc)) return; // network call -- never done while holding stateMutex
 
   JsonArray arr = doc.as<JsonArray>();
@@ -275,6 +394,18 @@ static void fetchBeaconSettings() {
 
   Serial.printf("Beacon settings: warning=%d%% (%d dBm) max gap=%lums threshold=%d%% (%d dBm)\n",
     warningPct, newRampStartRssi, newBeepMaxGapMs, thresholdPct, newGlobalThresholdRssi);
+
+  // WiFi credentials can be overridden from the app (see loadWifiCredentials()
+  // for why this only actually takes effect on the next reconnect, not
+  // immediately). Blank/null in Supabase means "keep using what's current."
+  const char* newSsid = row["wifi_ssid"] | "";
+  const char* newPassword = row["wifi_password"] | "";
+  if (newSsid[0] && (effectiveSsid != newSsid || effectivePassword != newPassword)) {
+    effectiveSsid = newSsid;
+    effectivePassword = newPassword;
+    saveWifiCredentials(effectiveSsid, effectivePassword);
+    Serial.println("WiFi credentials updated from Supabase -- will be used next time the board reconnects");
+  }
 }
 
 static void fetchTools() {
@@ -527,6 +658,7 @@ static void evaluateAlarms() {
 // buzzer/LED cadence stays smooth regardless of network timing.
 
 static void networkTask(void* param) {
+  loadWifiCredentials();
   connectWiFi();
 
   unsigned long lastFetchMs = millis();
@@ -547,6 +679,26 @@ static void networkTask(void* param) {
 
     syncPendingAlarms();
 
+    xSemaphoreTake(stateMutex, portMAX_DELAY);
+    bool doProvision = bleProvisionRequested;
+    String newSsid = pendingBleSsid;
+    String newPassword = pendingBlePassword;
+    bleProvisionRequested = false;
+    xSemaphoreGive(stateMutex);
+
+    if (doProvision) {
+      effectiveSsid = newSsid;
+      effectivePassword = newPassword;
+      saveWifiCredentials(effectiveSsid, effectivePassword);
+      WiFi.disconnect();
+      connectWiFi();
+      if (WiFi.status() == WL_CONNECTED) {
+        setProvisioningStatus(("connected: " + WiFi.localIP().toString()).c_str());
+      } else {
+        setProvisioningStatus("failed: could not connect with those credentials");
+      }
+    }
+
     vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
@@ -561,6 +713,7 @@ void setup() {
 
   initBuzzer();
   startBleScan();
+  startBleProvisioning();
   lastScanRestartMs = millis();
 
   xTaskCreatePinnedToCore(networkTask, "networkTask", 8192, nullptr, 1, nullptr, 0);

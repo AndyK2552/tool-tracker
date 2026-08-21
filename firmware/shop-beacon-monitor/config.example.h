@@ -2,8 +2,20 @@
 
 // Copy this file to config.h (config.h is gitignored) and fill in your details.
 
+// Fallback WiFi, used for the very first boot (and any boot with no cached
+// override in flash yet). Once online, the board's Beacon Settings page in
+// the app can change the network it uses without reflashing -- see
+// loadWifiCredentials()/fetchBeaconSettings() in the sketch. These values
+// stop mattering once an override has ever been saved.
 #define WIFI_SSID "YourShopWiFi"
 #define WIFI_PASSWORD "YourWiFiPassword"
+
+// PIN required to push new WiFi credentials over Bluetooth (see the app's
+// Beacon Settings page -> "Update WiFi via Bluetooth"). Anyone in BLE range
+// who knows this PIN can change the board's network, so pick something
+// other than the default and keep it out of any public repo. Must match the
+// PROVISIONING_PIN constant in src/BleWifiProvision.jsx.
+#define BLE_PROVISIONING_PIN "482913"
 
 // SUPABASE_URL is the same value as VITE_SUPABASE_URL in tool-tracker/.env.
 //
