@@ -686,15 +686,29 @@ static void networkTask(void* param) {
     xSemaphoreGive(stateMutex);
 
     if (doProvision) {
+      // Try the new credentials live first -- only adopt them (in RAM and
+      // in flash) once they've actually proven they can connect. Otherwise
+      // a typo'd password would get saved as the new "effective" WiFi and
+      // the board would loop retrying it forever, which also crowds out
+      // BLE advertising airtime (WiFi and BLE share one radio here) right
+      // when you need Bluetooth most to fix it.
+      String oldSsid = effectiveSsid;
+      String oldPassword = effectivePassword;
+
       effectiveSsid = newSsid;
       effectivePassword = newPassword;
-      saveWifiCredentials(effectiveSsid, effectivePassword);
       WiFi.disconnect();
       connectWiFi();
+
       if (WiFi.status() == WL_CONNECTED) {
+        saveWifiCredentials(effectiveSsid, effectivePassword);
         setProvisioningStatus(("connected: " + WiFi.localIP().toString()).c_str());
       } else {
-        setProvisioningStatus("failed: could not connect with those credentials");
+        effectiveSsid = oldSsid;
+        effectivePassword = oldPassword;
+        WiFi.disconnect();
+        connectWiFi();
+        setProvisioningStatus("failed: could not connect -- reverted to previous WiFi");
       }
     }
 
@@ -718,7 +732,7 @@ void setup() {
   // traffic and crashed with "assert failed: ble_svc_gap_init ... rc == 0"
   // on boot -- doing the one-time server setup first, then starting the
   // continuous scan, avoids that.
-  NimBLEDevice::init("ShopBeaconMonitor"); // named so it's identifiable in a BLE device picker (Web Bluetooth, nRF Connect, etc.)
+  NimBLEDevice::init("KYPD Tool Tracker"); // named so it's identifiable in a BLE device picker (Web Bluetooth, nRF Connect, etc.)
   startBleProvisioning();
   startBleScan();
   lastScanRestartMs = millis();

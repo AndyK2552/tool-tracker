@@ -155,7 +155,7 @@ side.
 The board runs both a BLE **central** role (scanning for tool beacons) and a
 BLE **peripheral** role (a small GATT server for this) at the same time —
 NimBLE-Arduino 2.x supports both concurrently on one radio. On boot it
-advertises as `ShopBeaconMonitor` with a provisioning service; the browser
+advertises as `KYPD Tool Tracker` with a provisioning service; the browser
 connects to that service and writes `{pin, ssid, password}` as JSON to its
 credentials characteristic, then listens for a status notification back
 (`received -- connecting...`, then `connected: <ip>` or `failed: ...`). On
