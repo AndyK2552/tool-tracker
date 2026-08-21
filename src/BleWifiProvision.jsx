@@ -10,12 +10,12 @@ const STATUS_CHAR_UUID = '6f5c0003-8bde-4ea9-9c1a-3f6b1a2e9001';
 // Must match BLE_PROVISIONING_PIN in the board's config.h.
 const PROVISIONING_PIN = '482913';
 
-function BleWifiProvision({ initialSsid = '', initialPassword = '' }) {
+function BleWifiProvision() {
   const [supported] = useState(() => !!navigator.bluetooth);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [ssid, setSsid] = useState(initialSsid);
-  const [password, setPassword] = useState(initialPassword);
+  const [ssid, setSsid] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState(null);
   const [sending, setSending] = useState(false);
@@ -102,8 +102,7 @@ function BleWifiProvision({ initialSsid = '', initialPassword = '' }) {
       <div>
         <p style={sliderHelpStyle}>
           Update WiFi via Bluetooth isn't available in this browser — it needs Web Bluetooth, which
-          only works in Chrome/Edge on desktop or Android (not Safari or iOS). Use the WiFi Network
-          fields above instead if the board is still online.
+          only works in Chrome/Edge on desktop or Android (not Safari or iOS).
         </p>
       </div>
     );
@@ -112,9 +111,9 @@ function BleWifiProvision({ initialSsid = '', initialPassword = '' }) {
   return (
     <div>
       <p style={sliderHelpStyle}>
-        For when the board is offline and can't reach the WiFi fields above (e.g. its old network
-        is gone). Connects directly over Bluetooth to send it new credentials — the board must be
-        powered on and within range. Chrome/Edge only.
+        Connects directly to the board over Bluetooth to change its WiFi network — no internet or
+        WiFi connection needed on either side, so this works even if the board is already offline
+        (e.g. its old network is gone). The board must be powered on and within range. Chrome/Edge only.
       </p>
 
       {!connected ? (

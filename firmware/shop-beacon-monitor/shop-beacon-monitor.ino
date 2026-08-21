@@ -195,6 +195,11 @@ static WifiProvisionCallbacks provisionCallbacks;
 
 static void startBleProvisioning() {
   NimBLEServer* server = NimBLEDevice::createServer();
+  // NimBLE defaults to NOT re-advertising after a client disconnects --
+  // without this, the board goes dark to new BLE connections the moment
+  // the first one ends (e.g. right after you finish provisioning it once),
+  // until the next reboot.
+  server->advertiseOnDisconnect(true);
   NimBLEService* service = server->createService(BLE_PROVISION_SERVICE_UUID);
 
   NimBLECharacteristic* credChar = service->createCharacteristic(BLE_PROVISION_CRED_CHAR_UUID, NIMBLE_PROPERTY::WRITE);

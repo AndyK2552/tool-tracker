@@ -131,26 +131,20 @@ alarm logic here runs off RSSI vs. threshold + the app's status.
 3. Tune the three sliders on the app's **Beacon Settings** page (Home →
    Beacon Settings) while watching the Serial Monitor — changes take effect
    on the board's next poll, no reflashing needed.
-4. The same page's **WiFi Network** fields let you change the board's
-   network (e.g. switching providers) without reflashing. Save while the
-   board is still online on its current network and it'll switch to the
-   new one automatically the next time it needs to reconnect — it caches
-   the credentials to flash the moment it fetches them, so this survives a
-   reboot/power cycle too. If the board is already offline with no path
-   back to the old network, this alone can't reach it — use **Update WiFi
-   via Bluetooth** instead (below it on the same page).
+4. Beacon Settings has a **WiFi Settings** button that opens a page for
+   changing the board's network (e.g. switching providers) without
+   reflashing — see the next section.
 5. Tools with an active door alarm show a "⚠ Near door" badge on the Tool
    Status list and detail page — the board writes that state back to
    Supabase whenever it changes.
 
-## Updating WiFi over Bluetooth (board is offline)
+## Updating the board's WiFi (via Bluetooth)
 
-The WiFi Network fields only reach the board while it's still online on its
-*current* network. If it's already offline — old router gone, provider
-swapped, etc. — there's no network path back to it at all. **Update WiFi via
-Bluetooth**, further down the same Beacon Settings page, solves that: it
-talks to the board directly over BLE, no WiFi/internet required on either
-side.
+The WiFi Settings page's **Update WiFi via Bluetooth** section talks to the
+board directly over BLE to change its network — no WiFi/internet required
+on either side, which also makes it work even if the board is already
+offline (old router gone, provider swapped, etc., with no network path back
+to it at all).
 
 The board runs both a BLE **central** role (scanning for tool beacons) and a
 BLE **peripheral** role (a small GATT server for this) at the same time —
@@ -158,9 +152,16 @@ NimBLE-Arduino 2.x supports both concurrently on one radio. On boot it
 advertises as `KYPD Tool Tracker` with a provisioning service; the browser
 connects to that service and writes `{pin, ssid, password}` as JSON to its
 credentials characteristic, then listens for a status notification back
-(`received -- connecting...`, then `connected: <ip>` or `failed: ...`). On
-success the board saves the credentials to flash the same way the Supabase
-path does, so they survive a reboot too.
+(`received -- connecting...`, then `connected: <ip>` or `failed: ...`). The
+new credentials are tried live first; only a successful connection gets
+saved to flash (so it survives a reboot too) — a failure reverts to
+whatever was working before, so a typo can't strand the board.
+
+Note that a BLE peripheral doesn't advertise again after a client
+disconnects unless told to — the sketch enables that explicitly
+(`server->advertiseOnDisconnect(true)` in `startBleProvisioning()`), so the
+board stays discoverable for repeat connections instead of going dark after
+the first one.
 
 This uses the **Web Bluetooth API**, which only works in Chromium browsers
 (Chrome/Edge) on desktop or Android — **not Safari or iOS**, which don't
