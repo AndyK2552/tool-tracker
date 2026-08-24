@@ -4,6 +4,7 @@ import { formatTechName } from './techDisplay';
 import { supabase } from './supabaseClient';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
+import { BEACON_FEATURE_ENABLED } from './featureFlags';
 
 // The board heartbeats roughly every 5s while online (see sendHeartbeat()
 // in shop-beacon-monitor.ino) -- missing that for 2+ minutes is a clear
@@ -42,6 +43,7 @@ function AdminHome({ onNavigate, techName, truckNumber }) {
   const [boardLastSeen, setBoardLastSeen] = useState(undefined); // undefined = loading, null = never reported
 
   useEffect(() => {
+    if (!BEACON_FEATURE_ENABLED) return;
     const fetchBoardStatus = async () => {
       const { data } = await supabase.from('beacon_settings').select('board_last_seen').eq('id', true).single();
       setBoardLastSeen(data?.board_last_seen ? new Date(data.board_last_seen) : null);
@@ -70,7 +72,7 @@ function AdminHome({ onNavigate, techName, truckNumber }) {
     { key: 'admin', icon: Plus, label: 'Add new tool' },
     { key: 'history', icon: Clock, label: 'Checkout history' },
     { key: 'users', icon: Users, label: 'Manage users' },
-    { key: 'beaconSettings', icon: Radio, label: 'Beacon settings' },
+    ...(BEACON_FEATURE_ENABLED ? [{ key: 'beaconSettings', icon: Radio, label: 'Beacon settings' }] : []),
   ];
 
   return (
@@ -85,7 +87,7 @@ function AdminHome({ onNavigate, techName, truckNumber }) {
           Admin Home
       </p>
 
-        {boardLastSeen !== undefined && (
+        {BEACON_FEATURE_ENABLED && boardLastSeen !== undefined && (
           <div
             style={{
               display: 'flex', alignItems: 'center', gap: '8px',

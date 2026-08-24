@@ -6,6 +6,7 @@ import { safeStopScanner, safePauseScanner, applyDefaultZoom } from './qrScanner
 import { formatMacInput, MAC_PATTERN } from './macFormat';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
+import { BEACON_FEATURE_ENABLED } from './featureFlags';
 
 function AdminPage({ onHome, onSelectTool }) {
   const [name, setName] = useState('');
@@ -384,34 +385,38 @@ function AdminPage({ onHome, onSelectTool }) {
             )}
           </div>
 
-          <label style={fieldLabelStyle}>Beacon (optional)</label>
-          <div style={{ marginBottom: '1rem' }}>
-            <input
-              type="text"
-              value={beaconMac}
-              onChange={(e) => setBeaconMac(formatMacInput(e.target.value))}
-              placeholder="AA:BB:CC:DD:EE:FF"
-              style={{ ...inputStyle, marginBottom: '0.5rem' }}
-            />
-            {scanningBeaconMac ? (
-              <div ref={beaconQrPanelRef}>
-                <div id="beacon-qr-add-reader" style={{ width: '100%' }}></div>
-                <p style={{ fontSize: '0.85rem', color: colors.textMuted, marginTop: '0.5rem' }}>
-                  Point the camera at the beacon's QR code — it'll scan automatically.
+          {BEACON_FEATURE_ENABLED && (
+            <>
+              <label style={fieldLabelStyle}>Beacon (optional)</label>
+              <div style={{ marginBottom: '1rem' }}>
+                <input
+                  type="text"
+                  value={beaconMac}
+                  onChange={(e) => setBeaconMac(formatMacInput(e.target.value))}
+                  placeholder="AA:BB:CC:DD:EE:FF"
+                  style={{ ...inputStyle, marginBottom: '0.5rem' }}
+                />
+                {scanningBeaconMac ? (
+                  <div ref={beaconQrPanelRef}>
+                    <div id="beacon-qr-add-reader" style={{ width: '100%' }}></div>
+                    <p style={{ fontSize: '0.85rem', color: colors.textMuted, marginTop: '0.5rem' }}>
+                      Point the camera at the beacon's QR code — it'll scan automatically.
+                    </p>
+                    <button type="button" onClick={() => setScanningBeaconMac(false)} style={{ ...secondaryBtnStyle, marginTop: '0.5rem' }}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={handleStartScanBeaconMac} style={{ ...secondaryBtnStyle, marginBottom: '0.75rem' }}>
+                    Scan Beacon QR Code
+                  </button>
+                )}
+                <p style={{ fontSize: '0.8rem', color: colors.textMuted, margin: '0.5rem 0 0' }}>
+                  The buzzer sounds at the shop door when this tool is Available and its beacon gets close. Alarm distance is set once for all tools in Beacon Settings, not per tool.
                 </p>
-                <button type="button" onClick={() => setScanningBeaconMac(false)} style={{ ...secondaryBtnStyle, marginTop: '0.5rem' }}>
-                  Cancel
-                </button>
               </div>
-            ) : (
-              <button type="button" onClick={handleStartScanBeaconMac} style={{ ...secondaryBtnStyle, marginBottom: '0.75rem' }}>
-                Scan Beacon QR Code
-              </button>
-            )}
-            <p style={{ fontSize: '0.8rem', color: colors.textMuted, margin: '0.5rem 0 0' }}>
-              The buzzer sounds at the shop door when this tool is Available and its beacon gets close. Alarm distance is set once for all tools in Beacon Settings, not per tool.
-            </p>
-          </div>
+            </>
+          )}
 
           <button type="submit" disabled={saving} style={btnStyle}>
             {saving ? 'Adding...' : 'Add Tool'}

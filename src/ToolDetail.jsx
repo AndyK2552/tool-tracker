@@ -8,6 +8,7 @@ import { formatTechName } from './techDisplay';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 import { formatMacInput, MAC_PATTERN } from './macFormat';
+import { BEACON_FEATURE_ENABLED } from './featureFlags';
 
 function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSelectTool }) {
   const [tool, setTool] = useState(null);
@@ -587,7 +588,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>QR Code:</strong> {tool.qr_code || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Location:</strong> {tool.location || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Status:</strong> {status}</p>
-          {tool.beacon_mac && (
+          {BEACON_FEATURE_ENABLED && tool.beacon_mac && (
             <p style={{ color: colors.textMuted }}>
               <strong style={{ color: colors.white }}>Beacon:</strong> {tool.beacon_mac}
               {tool.beacon_alarm_active && (
@@ -659,7 +660,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               <button onClick={handleStartAssignLocation} style={{ ...(assigningLocation ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                 Assign Location
               </button>
-              {isAdmin && (
+              {BEACON_FEATURE_ENABLED && isAdmin && (
                 <button onClick={handleStartAssignBeacon} style={{ ...(assigningBeacon ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                   {tool.beacon_mac ? 'Edit Beacon' : 'Assign Beacon'}
                 </button>
@@ -746,7 +747,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
             </div>
           )}
 
-          {isAdmin && assigningBeacon && (
+          {BEACON_FEATURE_ENABLED && isAdmin && assigningBeacon && (
             <div ref={beaconPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
               <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
                 Beacon MAC Address
