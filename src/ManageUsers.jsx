@@ -18,6 +18,16 @@ function ManageUsers({ onHome, onSelectUser }) {
     fetchUsers();
   }, []);
 
+  // Users with no truck assigned first (alphabetical), then everyone else
+  // by truck number ascending.
+  const sortedUsers = [...users].sort((a, b) => {
+    const aHasTruck = !!a.truck_number;
+    const bHasTruck = !!b.truck_number;
+    if (aHasTruck !== bHasTruck) return aHasTruck ? 1 : -1;
+    if (!aHasTruck) return a.name.localeCompare(b.name);
+    return a.truck_number.localeCompare(b.truck_number, undefined, { numeric: true });
+  });
+
   const cardStyle = {
     background: colors.navyLight,
     border: `0.5px solid ${colors.navyBorder}`,
@@ -43,7 +53,7 @@ function ManageUsers({ onHome, onSelectUser }) {
         <h1 style={{ color: colors.white, fontSize: '20px' }}>Manage Users ({users.length})</h1>
 
         <div style={{ maxWidth: '450px' }}>
-          {users.map((user) => (
+          {sortedUsers.map((user) => (
             <div key={user.id} onClick={() => onSelectUser(user.id)} style={cardStyle}>
               <p style={{ color: colors.white, fontWeight: 'bold', margin: '0 0 4px' }}>{formatTechName(user.name, user.truck_number)}</p>
               <p style={{ color: colors.textMuted, fontSize: '0.85rem', margin: 0 }}>
