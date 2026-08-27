@@ -15,4 +15,4 @@ export const RFID_FEATURE_ENABLED = false;
 // The RFID tag-assignment page (scan a tool's QR code with the Zebra RFD8500,
 // then scan its RFID tags to link them in tool_rfid_tags). Independent of the
 // other two flags above -- each RFID-related surface ships on its own.
-export const RFID_TAG_ASSIGNMENT_ENABLED = false;
+export const RFID_TAG_ASSIGNMENT_ENABLED = true;
