@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Camera, ClipboardList, Plus, Clock, Users, Radio } from 'lucide-react';
+import { Camera, ClipboardList, Plus, Clock, Users, Radio, Scan, Tag } from 'lucide-react';
 import { formatTechName } from './techDisplay';
 import { supabase } from './supabaseClient';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
-import { BEACON_FEATURE_ENABLED } from './featureFlags';
+import { BEACON_FEATURE_ENABLED, RFID_FEATURE_ENABLED, RFID_TAG_ASSIGNMENT_ENABLED } from './featureFlags';
 
 // The board heartbeats roughly every 5s while online (see sendHeartbeat()
 // in shop-beacon-monitor.ino) -- missing that for 2+ minutes is a clear
@@ -73,6 +73,8 @@ function AdminHome({ onNavigate, techName, truckNumber }) {
     { key: 'history', icon: Clock, label: 'Checkout history' },
     { key: 'users', icon: Users, label: 'Manage users' },
     ...(BEACON_FEATURE_ENABLED ? [{ key: 'beaconSettings', icon: Radio, label: 'Beacon settings' }] : []),
+    ...(RFID_FEATURE_ENABLED ? [{ key: 'rfidReconciliation', icon: Scan, label: 'RFID reconciliation' }] : []),
+    ...(RFID_TAG_ASSIGNMENT_ENABLED ? [{ key: 'rfidTagAssignment', icon: Tag, label: 'Assign RFID tags' }] : []),
   ];
 
   return (

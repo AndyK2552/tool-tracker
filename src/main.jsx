@@ -14,6 +14,8 @@ import ManageUsers from './ManageUsers.jsx'
 import UserDetail from './UserDetail.jsx'
 import BeaconSettings from './BeaconSettings.jsx'
 import WifiSettings from './WifiSettings.jsx'
+import RfidReconciliation from './RfidReconciliation.jsx'
+import RfidTagAssignment from './RfidTagAssignment.jsx'
 import { colors } from './theme'
 import { installGlobalCrashLogging, getLastCrash, clearLastCrash, logCrash } from './crashLog.js'
 import { useRegisterSW } from 'virtual:pwa-register/react'
@@ -263,6 +265,14 @@ function Root() {
 
   if (view === 'wifiSettings') {
     return <WifiSettings onBack={() => setView('beaconSettings')} onHome={() => setView('home')} />
+  }
+
+  if (view === 'rfidReconciliation') {
+    return <RfidReconciliation onHome={() => setView('home')} />
+  }
+
+  if (view === 'rfidTagAssignment') {
+    return <RfidTagAssignment onHome={() => setView('home')} />
   }
 
   const selectUser = (id) => {

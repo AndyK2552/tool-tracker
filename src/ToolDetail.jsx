@@ -8,7 +8,7 @@ import { formatTechName } from './techDisplay';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
 import { formatMacInput, MAC_PATTERN } from './macFormat';
-import { BEACON_FEATURE_ENABLED } from './featureFlags';
+import { BEACON_FEATURE_ENABLED, RFID_TAG_ASSIGNMENT_ENABLED } from './featureFlags';
 
 function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSelectTool }) {
   const [tool, setTool] = useState(null);
@@ -23,6 +23,9 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [assigningBeacon, setAssigningBeacon] = useState(false);
   const [newBeaconMac, setNewBeaconMac] = useState('');
   const [scanningBeaconMac, setScanningBeaconMac] = useState(false);
+  const [assigningRfidTags, setAssigningRfidTags] = useState(false);
+  const [rfidTags, setRfidTags] = useState([]);
+  const [newRfidTag, setNewRfidTag] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState('');
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
@@ -33,6 +36,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const qrPanelRef = useRef(null);
   const locationPanelRef = useRef(null);
   const beaconPanelRef = useRef(null);
+  const rfidPanelRef = useRef(null);
   const namePanelRef = useRef(null);
   const photoPanelRef = useRef(null);
   const messageRef = useRef(null);
@@ -59,6 +63,10 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   useEffect(() => {
     if (assigningBeacon) beaconPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [assigningBeacon]);
+
+  useEffect(() => {
+    if (assigningRfidTags) rfidPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [assigningRfidTags]);
 
   useEffect(() => {
     if (!scanningBeaconMac) return;
@@ -125,9 +133,15 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setTechs(data || []);
   };
 
+  const fetchRfidTags = async () => {
+    const { data } = await supabase.from('tool_rfid_tags').select('tag_id').eq('tool_id', toolId).order('created_at');
+    setRfidTags((data || []).map((r) => r.tag_id));
+  };
+
   useEffect(() => {
     fetchTool();
     fetchTechs();
+    if (RFID_TAG_ASSIGNMENT_ENABLED) fetchRfidTags();
   }, [toolId]);
 
   useEffect(() => {
@@ -162,6 +176,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningLocation(false);
     setAssigningBeacon(false);
     setScanningBeaconMac(false);
+    setAssigningRfidTags(false);
     setUpdatingPhoto(false);
     setEditingName(false);
     setAssigningQr(true);
@@ -230,6 +245,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setEditingName(false);
     setAssigningBeacon(false);
     setScanningBeaconMac(false);
+    setAssigningRfidTags(false);
     setAssigningLocation(true);
   };
 
@@ -266,6 +282,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningLocation(false);
     setUpdatingPhoto(false);
     setEditingName(false);
+    setAssigningRfidTags(false);
     setAssigningBeacon(true);
   };
 
@@ -309,6 +326,57 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage({ type: 'success', text: trimmedMac ? 'Beacon assigned.' : 'Beacon removed.' });
   };
 
+  const handleStartAssignRfidTags = () => {
+    setNewRfidTag('');
+    setMessage(null);
+    setAssigningQr(false);
+    setAssigningLocation(false);
+    setAssigningBeacon(false);
+    setScanningBeaconMac(false);
+    setUpdatingPhoto(false);
+    setEditingName(false);
+    setAssigningRfidTags(true);
+  };
+
+  const handleCancelAssignRfidTags = () => {
+    setAssigningRfidTags(false);
+    setNewRfidTag('');
+  };
+
+  const handleAddRfidTag = async () => {
+    const tagId = newRfidTag.trim();
+    if (!tagId) return;
+
+    if (rfidTags.includes(tagId)) {
+      setMessage({ type: 'info', text: `Tag ${tagId} is already assigned to this tool.` });
+      setNewRfidTag('');
+      return;
+    }
+
+    const { error } = await supabase.from('tool_rfid_tags').insert({ tag_id: tagId, tool_id: tool.id });
+    if (error) {
+      if (error.code === '23505') {
+        setMessage({ type: 'error', text: `Tag ${tagId} is already assigned to a different tool.` });
+      } else {
+        setMessage({ type: 'error', text: error.message });
+      }
+      return;
+    }
+
+    setRfidTags((prev) => [...prev, tagId]);
+    setNewRfidTag('');
+    setMessage({ type: 'success', text: `Added tag ${tagId}.` });
+  };
+
+  const handleRemoveRfidTag = async (tagId) => {
+    const { error } = await supabase.from('tool_rfid_tags').delete().eq('tag_id', tagId);
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+    setRfidTags((prev) => prev.filter((t) => t !== tagId));
+  };
+
   const handleStartEditName = () => {
     setNewName(tool.name || '');
     setMessage(null);
@@ -316,6 +384,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningLocation(false);
     setAssigningBeacon(false);
     setScanningBeaconMac(false);
+    setAssigningRfidTags(false);
     setUpdatingPhoto(false);
     setEditingName(true);
   };
@@ -370,6 +439,7 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningLocation(false);
     setAssigningBeacon(false);
     setScanningBeaconMac(false);
+    setAssigningRfidTags(false);
     setEditingName(false);
     setUpdatingPhoto(true);
     openPhotoCamera();
@@ -596,6 +666,11 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               )}
             </p>
           )}
+          {RFID_TAG_ASSIGNMENT_ENABLED && (
+            <p style={{ color: colors.textMuted }}>
+              <strong style={{ color: colors.white }}>RFID Tags:</strong> {rfidTags.length > 0 ? rfidTags.join(', ') : '—'}
+            </p>
+          )}
           <p style={{ color: colors.textMuted }}>
             <strong style={{ color: colors.white }}>{status === 'Checked Out' ? 'Checked out by:' : 'Last returned by:'}</strong>{' '}
             {tool.checked_out_by
@@ -663,6 +738,11 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               {BEACON_FEATURE_ENABLED && isAdmin && (
                 <button onClick={handleStartAssignBeacon} style={{ ...(assigningBeacon ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                   {tool.beacon_mac ? 'Edit Beacon' : 'Assign Beacon'}
+                </button>
+              )}
+              {RFID_TAG_ASSIGNMENT_ENABLED && isAdmin && (
+                <button onClick={handleStartAssignRfidTags} style={{ ...(assigningRfidTags ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
+                  Assign RFID Tags
                 </button>
               )}
               {isAdmin && (
@@ -777,6 +857,59 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button onClick={handleSubmitBeacon} style={btnStyle}>Submit</button>
                 <button onClick={handleCancelAssignBeacon} style={secondaryBtnStyle}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {RFID_TAG_ASSIGNMENT_ENABLED && isAdmin && assigningRfidTags && (
+            <div ref={rfidPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
+              <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
+                RFID Tags
+              </label>
+              {rfidTags.length === 0 ? (
+                <p style={{ color: colors.textMuted, fontSize: '0.85rem', margin: '0 0 0.75rem' }}>No tags assigned yet.</p>
+              ) : (
+                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0.75rem' }}>
+                  {rfidTags.map((tagId) => (
+                    <li
+                      key={tagId}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        color: colors.white, fontSize: '0.9rem', padding: '4px 0',
+                      }}
+                    >
+                      {tagId}
+                      <button
+                        onClick={() => handleRemoveRfidTag(tagId)}
+                        style={{ ...secondaryBtnStyle, padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <input
+                type="text"
+                value={newRfidTag}
+                onChange={(e) => setNewRfidTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  handleAddRfidTag();
+                }}
+                placeholder="Scan or type a tag ID..."
+                style={{
+                  width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.5rem', boxSizing: 'border-box',
+                }}
+              />
+              <p style={{ fontSize: '0.8rem', color: colors.textMuted, marginTop: 0, marginBottom: '0.75rem' }}>
+                Put the RFD8500 in RFID mode and scan a tag, or type an ID and press Enter to add it. 2-3 tags per
+                tool is typical, for read-angle redundancy. Use Remove if a tag falls off and a replacement is
+                assigned.
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button onClick={handleCancelAssignRfidTags} style={btnStyle}>Done</button>
               </div>
             </div>
           )}
