@@ -89,6 +89,8 @@ static SemaphoreHandle_t stateMutex;
 static bool pendingPlay = false;
 static char pendingPlayPath[80] = "";
 static bool pendingPause = false;
+static bool pendingSeek = false;
+static float pendingSeekSeconds = 0;
 
 static PlaybackStatus sharedStatus = STATUS_IDLE;
 
@@ -97,6 +99,12 @@ static PlaybackStatus sharedStatus = STATUS_IDLE;
 // Speaker Test slider (0-100), applied every poll cycle regardless of
 // command_seq (see fetchCommand()). 1.0 = full volume from the source file.
 static float sharedVolume = 0.2f;
+
+// Playback position/duration, in seconds -- written by loop() as it plays,
+// read by networkTask to report back to Supabase every poll cycle (same as
+// volume) so the app's scrubber can show progress.
+static float sharedPositionSeconds = 0;
+static float sharedDurationSeconds = 0;
 
 static void requestPlay(const String& path) {
   xSemaphoreTake(stateMutex, portMAX_DELAY);
@@ -109,6 +117,13 @@ static void requestPlay(const String& path) {
 static void requestPause() {
   xSemaphoreTake(stateMutex, portMAX_DELAY);
   pendingPause = true;
+  xSemaphoreGive(stateMutex);
+}
+
+static void requestSeek(float seconds) {
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  pendingSeek = true;
+  pendingSeekSeconds = seconds;
   xSemaphoreGive(stateMutex);
 }
 
@@ -128,6 +143,20 @@ static PlaybackStatus getSharedStatus() {
 static void setSharedVolume(float v) {
   xSemaphoreTake(stateMutex, portMAX_DELAY);
   sharedVolume = v;
+  xSemaphoreGive(stateMutex);
+}
+
+static void setSharedPosition(float positionSeconds, float durationSeconds) {
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  sharedPositionSeconds = positionSeconds;
+  sharedDurationSeconds = durationSeconds;
+  xSemaphoreGive(stateMutex);
+}
+
+static void getSharedPosition(float* positionSeconds, float* durationSeconds) {
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  *positionSeconds = sharedPositionSeconds;
+  *durationSeconds = sharedDurationSeconds;
   xSemaphoreGive(stateMutex);
 }
 
@@ -203,12 +232,12 @@ static bool nowIso8601(char* out, size_t outLen) {
 
 // ---------- Supabase ----------
 
-static bool fetchCommand(long* outSeq, String* outAction, String* outSoundPath, int* outVolumePct) {
+static bool fetchCommand(long* outSeq, String* outAction, String* outSoundPath, int* outVolumePct, float* outSeekSeconds) {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
 
-  String url = String(SUPABASE_URL) + "/rest/v1/speaker_test?id=eq.true&select=command_seq,action,sound_path,volume";
+  String url = String(SUPABASE_URL) + "/rest/v1/speaker_test?id=eq.true&select=command_seq,action,sound_path,volume,seek_seconds";
   http.begin(client, url);
   http.addHeader("apikey", SUPABASE_SERVICE_ROLE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_ROLE_KEY);
@@ -229,6 +258,7 @@ static bool fetchCommand(long* outSeq, String* outAction, String* outSoundPath, 
         *outAction = String((const char*)(row["action"] | ""));
         *outSoundPath = String((const char*)(row["sound_path"] | ""));
         *outVolumePct = row["volume"] | 20;
+        *outSeekSeconds = row["seek_seconds"] | -1.0f; // -1 = no seek requested (column is nullable)
         ok = true;
       }
     }
@@ -239,7 +269,7 @@ static bool fetchCommand(long* outSeq, String* outAction, String* outSoundPath, 
   return ok;
 }
 
-static void patchStatus(const char* status, const char* statusDetail) {
+static void patchStatus(const char* status, const char* statusDetail, float positionSeconds, float durationSeconds) {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
@@ -254,6 +284,8 @@ static void patchStatus(const char* status, const char* statusDetail) {
   JsonDocument body;
   body["status"] = status;
   body["status_detail"] = statusDetail;
+  body["position_seconds"] = positionSeconds;
+  body["duration_seconds"] = durationSeconds;
   char iso[25];
   if (nowIso8601(iso, sizeof(iso))) body["board_last_seen"] = iso;
 
@@ -404,7 +436,10 @@ struct {
   bool open = false;
   bool paused = false;
   uint16_t numChannels = 0;
+  uint32_t sampleRate = 0;
   uint32_t bytesRemaining = 0;
+  uint32_t totalDataSize = 0;   // dataSize at the start of the file, for position/duration math
+  uint32_t dataStartOffset = 0; // absolute file position where PCM samples begin, for seeking
 } playback;
 
 static char currentSoundPath[80] = "";
@@ -422,6 +457,7 @@ static void stopPlayback() {
   playback.paused = false;
   currentSoundPath[0] = '\0';
   setSharedStatus(STATUS_IDLE);
+  setSharedPosition(0, 0);
 }
 
 static void startPlayback(const char* soundPath) {
@@ -447,12 +483,35 @@ static void startPlayback(const char* soundPath) {
   playback.open = true;
   playback.paused = false;
   playback.numChannels = numChannels;
+  playback.sampleRate = sampleRate;
   playback.bytesRemaining = dataSize;
+  playback.totalDataSize = dataSize;
+  playback.dataStartOffset = f.position(); // parseWavHeader left the file positioned right at the first PCM sample
   strncpy(currentSoundPath, soundPath, sizeof(currentSoundPath) - 1);
   currentSoundPath[sizeof(currentSoundPath) - 1] = '\0';
 
+  size_t bytesPerFrame = numChannels * sizeof(int16_t);
+  float durationSeconds = (float)dataSize / (sampleRate * bytesPerFrame);
+  setSharedPosition(0, durationSeconds);
   setSharedStatus(STATUS_PLAYING);
-  Serial.printf("Playing %s: %lu Hz, %u-bit, %u channel(s)\n", soundPath, sampleRate, bitsPerSample, numChannels);
+  Serial.printf("Playing %s: %lu Hz, %u-bit, %u channel(s), %.1fs\n", soundPath, sampleRate, bitsPerSample, numChannels, durationSeconds);
+}
+
+// Repositions within the currently open file -- e.g. from the app's
+// scrubber. Byte offset is rounded down to a whole frame so playback
+// doesn't end up reading a partial (misaligned) sample.
+static void seekPlayback(float seconds) {
+  if (!playback.open) return;
+
+  size_t bytesPerFrame = playback.numChannels * sizeof(int16_t);
+  uint32_t targetOffset = (uint32_t)(seconds * playback.sampleRate) * bytesPerFrame;
+  if (targetOffset > playback.totalDataSize) targetOffset = playback.totalDataSize;
+
+  playback.file.seek(playback.dataStartOffset + targetOffset);
+  playback.bytesRemaining = playback.totalDataSize - targetOffset;
+
+  float durationSeconds = (float)playback.totalDataSize / (playback.sampleRate * bytesPerFrame);
+  setSharedPosition(seconds, durationSeconds);
 }
 
 static void pausePlayback() {
@@ -472,15 +531,19 @@ static void resumePlayback() {
 // Consumes whatever the network task last requested. Called every loop()
 // iteration; cheap when there's nothing pending.
 static void consumePendingCommands() {
-  bool doPlay, doPause;
+  bool doPlay, doPause, doSeek;
   char path[80];
+  float seekSeconds = 0;
 
   xSemaphoreTake(stateMutex, portMAX_DELAY);
   doPlay = pendingPlay;
   doPause = pendingPause;
+  doSeek = pendingSeek;
   if (doPlay) strncpy(path, pendingPlayPath, sizeof(path));
+  if (doSeek) seekSeconds = pendingSeekSeconds;
   pendingPlay = false;
   pendingPause = false;
+  pendingSeek = false;
   xSemaphoreGive(stateMutex);
 
   if (doPlay) {
@@ -492,6 +555,9 @@ static void consumePendingCommands() {
   }
   if (doPause) {
     pausePlayback();
+  }
+  if (doSeek) {
+    seekPlayback(seekSeconds);
   }
 }
 
@@ -535,6 +601,10 @@ static void pumpPlayback() {
 
   size_t bytesWritten;
   i2s_write(I2S_PORT, stereoBuf, framesRead * 4, &bytesWritten, portMAX_DELAY);
+
+  float positionSeconds = (float)(playback.totalDataSize - playback.bytesRemaining) / (playback.sampleRate * bytesPerFrame);
+  float durationSeconds = (float)playback.totalDataSize / (playback.sampleRate * bytesPerFrame);
+  setSharedPosition(positionSeconds, durationSeconds);
 }
 
 // ---------- Network task ----------
@@ -553,7 +623,11 @@ static void networkTask(void* param) {
     long seq = -1;
     String action, soundPath;
     int volumePct = 20;
-    if (fetchCommand(&seq, &action, &soundPath, &volumePct)) {
+    float seekSeconds = -1;
+    float currentPos, currentDur;
+    getSharedPosition(&currentPos, &currentDur);
+
+    if (fetchCommand(&seq, &action, &soundPath, &volumePct, &seekSeconds)) {
       setSharedVolume(volumePct / 100.0f);
 
       if (seq >= 0 && seq != lastSeenSeq) {
@@ -561,14 +635,16 @@ static void networkTask(void* param) {
         Serial.printf("New command #%ld: action=%s sound_path=%s\n", seq, action.c_str(), soundPath.c_str());
 
         if (action == "play" && soundPath.length() > 0) {
-          patchStatus("downloading", "");
+          patchStatus("downloading", "", currentPos, currentDur);
           if (downloadSoundIfMissing(soundPath)) {
             requestPlay(soundPath);
           } else {
-            patchStatus("error", "download failed");
+            patchStatus("error", "download failed", currentPos, currentDur);
           }
         } else if (action == "pause") {
           requestPause();
+        } else if (action == "seek" && seekSeconds >= 0) {
+          requestSeek(seekSeconds);
         }
       }
     }
@@ -579,7 +655,8 @@ static void networkTask(void* param) {
       case STATUS_PAUSED:  statusStr = "paused"; break;
       default:              statusStr = "idle"; break;
     }
-    patchStatus(statusStr, "");
+    getSharedPosition(&currentPos, &currentDur); // re-read -- may have changed since the block above (a seek/play just landed)
+    patchStatus(statusStr, "", currentPos, currentDur);
 
     vTaskDelay(pdMS_TO_TICKS(COMMAND_POLL_INTERVAL_MS));
   }

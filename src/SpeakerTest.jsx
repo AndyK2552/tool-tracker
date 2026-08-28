@@ -17,8 +17,10 @@ function SpeakerTest({ onHome }) {
   const [state, setState] = useState(null);
   const [message, setMessage] = useState(null);
   const [localVolume, setLocalVolume] = useState(20);
+  const [displayPosition, setDisplayPosition] = useState(0);
   const commandSeqRef = useRef(0);
   const volumeDebounceRef = useRef(null);
+  const isScrubbingRef = useRef(false);
 
   useEffect(() => {
     const fetchFiles = async () => {
@@ -78,6 +80,56 @@ function SpeakerTest({ onHome }) {
   const handlePlay = (file) => sendCommand('play', file.name);
   const handlePause = () => sendCommand('pause');
 
+  // The board only reports position once per ~1s poll cycle -- ticking it
+  // forward locally between updates makes the scrubber move smoothly
+  // instead of jumping once a second. Each real update from the board
+  // (via Realtime) resnaps displayPosition to the true value, so drift
+  // never accumulates for more than a second.
+  useEffect(() => {
+    if (isScrubbingRef.current) return;
+    setDisplayPosition(state?.position_seconds || 0);
+  }, [state?.position_seconds]);
+
+  useEffect(() => {
+    if (state?.status !== 'playing') return;
+    const interval = setInterval(() => {
+      if (isScrubbingRef.current) return;
+      setDisplayPosition((p) => Math.min(p + 0.25, state.duration_seconds || p));
+    }, 250);
+    return () => clearInterval(interval);
+  }, [state?.status, state?.duration_seconds]);
+
+  const handleScrubChange = (e) => {
+    isScrubbingRef.current = true;
+    setDisplayPosition(Number(e.target.value));
+  };
+
+  const commitScrub = async (e) => {
+    isScrubbingRef.current = false;
+    const seconds = Number(e.target.value);
+    const nextSeq = commandSeqRef.current + 1;
+    commandSeqRef.current = nextSeq;
+    const { data, error } = await supabase
+      .from('speaker_test')
+      .update({ action: 'seek', seek_seconds: seconds, command_seq: nextSeq })
+      .eq('id', true)
+      .select()
+      .single();
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+    setState(data);
+  };
+
+  const formatTime = (seconds) => {
+    if (!seconds || !isFinite(seconds)) return '0:00';
+    const total = Math.floor(seconds);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
   // Updates the slider instantly for a responsive feel, but only writes to
   // Supabase after the user stops dragging -- the board applies volume on
   // every ~1s poll regardless of command_seq, so there's no reason to spam
@@ -131,6 +183,42 @@ function SpeakerTest({ onHome }) {
             </span>
           )}
         </div>
+
+        {state?.sound_path && state.status !== 'idle' && (
+          <div style={{
+            background: colors.navyLight, border: `0.5px solid ${colors.navyBorder}`, borderRadius: '8px',
+            padding: '0.85rem', marginBottom: '1.25rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', gap: '0.5rem' }}>
+              <strong style={{ color: colors.white, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {state.sound_path}
+              </strong>
+              <button
+                onClick={() => (state.status === 'playing' ? handlePause() : handlePlay({ name: state.sound_path }))}
+                disabled={state.status === 'downloading'}
+                style={{ ...secondaryBtnStyle, marginTop: 0, padding: '0.4rem 0.6rem', flexShrink: 0 }}
+              >
+                {state.status === 'playing' ? <Pause size={16} /> : <Play size={16} />}
+              </button>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={state.duration_seconds || 0}
+              step="0.1"
+              value={Math.min(displayPosition, state.duration_seconds || 0)}
+              onChange={handleScrubChange}
+              onMouseUp={commitScrub}
+              onTouchEnd={commitScrub}
+              disabled={state.status === 'downloading'}
+              style={{ width: '100%' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: colors.textMuted, marginTop: '0.15rem' }}>
+              <span>{formatTime(displayPosition)}</span>
+              <span>{formatTime(state.duration_seconds)}</span>
+            </div>
+          </div>
+        )}
 
         <div style={{ marginBottom: '1.25rem' }}>
           <label style={{ display: 'block', color: colors.white, fontSize: '14px', marginBottom: '0.35rem' }}>
