@@ -49,6 +49,9 @@ function SpeakerTest({ onHome }) {
     // Realtime keeps the UI in sync with what the board is actually doing
     // (status flips to "playing"/"paused"/"idle" as it acts on commands and
     // as playback finishes on its own) without the browser having to poll.
+    // Requires speaker_test to be added to the supabase_realtime publication
+    // -- see sql/enable_realtime_for_speaker_test.sql -- creating the table
+    // alone does NOT start broadcasting its changes.
     const channel = supabase
       .channel('speaker_test_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'speaker_test' }, (payload) => {
@@ -57,7 +60,16 @@ function SpeakerTest({ onHome }) {
       })
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    // Belt-and-suspenders fallback: re-fetch periodically regardless of
+    // Realtime, so a dropped/never-connected websocket (flaky shop WiFi,
+    // a misconfigured publication) can't leave the UI permanently stuck
+    // showing stale state -- it self-corrects within a few seconds either way.
+    const pollInterval = setInterval(fetchState, 3000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   const sendCommand = async (action, soundPath) => {
