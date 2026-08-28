@@ -627,6 +627,16 @@ static void networkTask(void* param) {
     float currentPos, currentDur;
     getSharedPosition(&currentPos, &currentDur);
 
+    // If this cycle issues a new play/pause, we already know what status
+    // that *will* result in -- report that directly rather than reading
+    // getSharedStatus() again right away. loop() runs on the other core and
+    // may not have processed the pending*() flag yet by the time we'd read
+    // it here, which would report a stale status (e.g. still "playing"
+    // right after issuing a pause) and cost a full extra ~1s poll cycle
+    // before the app finds out what actually happened.
+    bool haveOptimisticStatus = false;
+    PlaybackStatus optimisticStatus = STATUS_IDLE;
+
     if (fetchCommand(&seq, &action, &soundPath, &volumePct, &seekSeconds)) {
       setSharedVolume(volumePct / 100.0f);
 
@@ -638,11 +648,15 @@ static void networkTask(void* param) {
           patchStatus("downloading", "", currentPos, currentDur);
           if (downloadSoundIfMissing(soundPath)) {
             requestPlay(soundPath);
+            haveOptimisticStatus = true;
+            optimisticStatus = STATUS_PLAYING;
           } else {
             patchStatus("error", "download failed", currentPos, currentDur);
           }
         } else if (action == "pause") {
           requestPause();
+          haveOptimisticStatus = true;
+          optimisticStatus = STATUS_PAUSED;
         } else if (action == "seek" && seekSeconds >= 0) {
           requestSeek(seekSeconds);
         }
@@ -650,7 +664,7 @@ static void networkTask(void* param) {
     }
 
     const char* statusStr;
-    switch (getSharedStatus()) {
+    switch (haveOptimisticStatus ? optimisticStatus : getSharedStatus()) {
       case STATUS_PLAYING: statusStr = "playing"; break;
       case STATUS_PAUSED:  statusStr = "paused"; break;
       default:              statusStr = "idle"; break;
