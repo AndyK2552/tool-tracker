@@ -302,9 +302,17 @@ static void patchStatus(const char* status, const char* statusDetail, float posi
 // Authenticates with the service_role key against Storage's object
 // endpoint, which works whether the bucket is public or private -- unlike
 // the earlier version of this sketch, the bucket doesn't need to be public.
-static bool downloadSoundIfMissing(const String& soundPath) {
+//
+// Re-downloads whenever the remote file's size differs from what's cached,
+// not just when nothing's cached at all -- otherwise re-uploading a fixed
+// version of a sound under the same filename (the normal way to iterate
+// while testing) would silently keep playing the old, stale cached copy
+// forever, since a same-named file already existing looked like "already
+// have it, nothing to do." Size isn't a perfect fingerprint (a same-size
+// replacement wouldn't be caught) but it's cheap -- no extra request beyond
+// the GET we're already making -- and covers the actual case that bit us.
+static bool downloadSoundIfNeeded(const String& soundPath) {
   String localPath = "/" + soundPath;
-  if (FFat.exists(localPath)) return true;
 
   WiFiClientSecure client;
   client.setInsecure();
@@ -317,9 +325,24 @@ static bool downloadSoundIfMissing(const String& soundPath) {
 
   int code = http.GET();
   if (code != HTTP_CODE_OK) {
-    Serial.printf("Download failed for %s: HTTP %d\n", soundPath.c_str(), code);
+    Serial.printf("Download check failed for %s: HTTP %d\n", soundPath.c_str(), code);
     http.end();
-    return false;
+    // A transient network hiccup shouldn't make a previously-working file
+    // stop playing -- fall back to whatever's cached, if anything.
+    return FFat.exists(localPath);
+  }
+
+  int remoteSize = http.getSize();
+  if (FFat.exists(localPath)) {
+    File existing = FFat.open(localPath, "r");
+    int localSize = existing.size();
+    existing.close();
+    if (remoteSize > 0 && remoteSize == localSize) {
+      Serial.printf("%s unchanged (%d bytes), using cached copy.\n", localPath.c_str(), localSize);
+      http.end();
+      return true;
+    }
+    Serial.printf("%s changed (cached %d bytes, remote %d bytes) -- re-downloading.\n", localPath.c_str(), localSize, remoteSize);
   }
 
   File f = FFat.open(localPath, "w");
@@ -646,7 +669,7 @@ static void networkTask(void* param) {
 
         if (action == "play" && soundPath.length() > 0) {
           patchStatus("downloading", "", currentPos, currentDur);
-          if (downloadSoundIfMissing(soundPath)) {
+          if (downloadSoundIfNeeded(soundPath)) {
             requestPlay(soundPath);
             haveOptimisticStatus = true;
             optimisticStatus = STATUS_PLAYING;
