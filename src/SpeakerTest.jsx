@@ -55,16 +55,26 @@ function SpeakerTest({ onHome }) {
     const channel = supabase
       .channel('speaker_test_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'speaker_test' }, (payload) => {
+        console.log('[SpeakerTest] Realtime update received:', payload.new);
         setState(payload.new);
         commandSeqRef.current = Math.max(commandSeqRef.current, payload.new.command_seq);
       })
-      .subscribe();
+      .subscribe((status) => {
+        // SUBSCRIBED means the websocket is up and listening. If this never
+        // logs SUBSCRIBED, or logs CHANNEL_ERROR/TIMED_OUT, Realtime isn't
+        // actually delivering anything and the 1s poll below is doing all
+        // the work -- which would explain a multi-second lag that tracks
+        // the poll interval rather than the board's ~1s update cadence.
+        console.log('[SpeakerTest] Realtime channel status:', status);
+      });
 
     // Belt-and-suspenders fallback: re-fetch periodically regardless of
     // Realtime, so a dropped/never-connected websocket (flaky shop WiFi,
-    // a misconfigured publication) can't leave the UI permanently stuck
-    // showing stale state -- it self-corrects within a few seconds either way.
-    const pollInterval = setInterval(fetchState, 3000);
+    // a misconfigured publication) can't leave the UI stuck showing stale
+    // state. Matches the board's own poll cadence (COMMAND_POLL_INTERVAL_MS
+    // in the firmware) so that even if this fallback ends up doing all the
+    // work, the lag stays close to the board's actual update rate.
+    const pollInterval = setInterval(fetchState, 1000);
 
     return () => {
       supabase.removeChannel(channel);
