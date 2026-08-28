@@ -7,8 +7,7 @@ import { getToolStatus } from './toolStatus';
 import { formatTechName } from './techDisplay';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
-import { formatMacInput, MAC_PATTERN } from './macFormat';
-import { BEACON_FEATURE_ENABLED, RFID_TAG_ASSIGNMENT_ENABLED } from './featureFlags';
+import { RFID_TAG_ASSIGNMENT_ENABLED } from './featureFlags';
 
 function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSelectTool }) {
   const [tool, setTool] = useState(null);
@@ -20,9 +19,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const [scannedQr, setScannedQr] = useState('');
   const [assigningLocation, setAssigningLocation] = useState(false);
   const [newLocation, setNewLocation] = useState('');
-  const [assigningBeacon, setAssigningBeacon] = useState(false);
-  const [newBeaconMac, setNewBeaconMac] = useState('');
-  const [scanningBeaconMac, setScanningBeaconMac] = useState(false);
   const [assigningRfidTags, setAssigningRfidTags] = useState(false);
   const [rfidTags, setRfidTags] = useState([]);
   const [newRfidTag, setNewRfidTag] = useState('');
@@ -35,7 +31,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   const scannerRef = useRef(null);
   const qrPanelRef = useRef(null);
   const locationPanelRef = useRef(null);
-  const beaconPanelRef = useRef(null);
   const rfidPanelRef = useRef(null);
   const namePanelRef = useRef(null);
   const photoPanelRef = useRef(null);
@@ -61,52 +56,8 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
   }, [assigningLocation]);
 
   useEffect(() => {
-    if (assigningBeacon) beaconPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [assigningBeacon]);
-
-  useEffect(() => {
     if (assigningRfidTags) rfidPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [assigningRfidTags]);
-
-  useEffect(() => {
-    if (!scanningBeaconMac) return;
-
-    const scanner = new Html5Qrcode('beacon-qr-reader');
-    scannerRef.current = scanner;
-
-    scanner
-      .start(
-        { facingMode: 'environment' },
-        { fps: 10 },
-        (decodedText) => {
-          setNewBeaconMac(formatMacInput(decodedText));
-          setScanningBeaconMac(false);
-        },
-        () => {}
-      )
-      .then(() => applyDefaultZoom(scanner))
-      .catch((err) => {
-        setMessage({ type: 'error', text: 'Could not start camera: ' + err });
-        setScanningBeaconMac(false);
-      });
-
-    return () => {
-      safeStopScanner(scanner);
-    };
-  }, [scanningBeaconMac]);
-
-  useEffect(() => {
-    if (!tool?.id) return;
-    const interval = setInterval(async () => {
-      const { data } = await supabase
-        .from('tools')
-        .select('beacon_alarm_active, beacon_last_seen')
-        .eq('id', tool.id)
-        .single();
-      if (data) setTool((t) => (t ? { ...t, ...data } : t));
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [tool?.id]);
 
   useEffect(() => {
     if (editingName) namePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -174,8 +125,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setScannedQr('');
     setMessage(null);
     setAssigningLocation(false);
-    setAssigningBeacon(false);
-    setScanningBeaconMac(false);
     setAssigningRfidTags(false);
     setUpdatingPhoto(false);
     setEditingName(false);
@@ -243,8 +192,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setAssigningQr(false);
     setUpdatingPhoto(false);
     setEditingName(false);
-    setAssigningBeacon(false);
-    setScanningBeaconMac(false);
     setAssigningRfidTags(false);
     setAssigningLocation(true);
   };
@@ -275,64 +222,11 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage({ type: 'success', text: 'Location updated.' });
   };
 
-  const handleStartAssignBeacon = () => {
-    setNewBeaconMac(tool.beacon_mac || '');
-    setMessage(null);
-    setAssigningQr(false);
-    setAssigningLocation(false);
-    setUpdatingPhoto(false);
-    setEditingName(false);
-    setAssigningRfidTags(false);
-    setAssigningBeacon(true);
-  };
-
-  const handleCancelAssignBeacon = () => {
-    setAssigningBeacon(false);
-    setScanningBeaconMac(false);
-    setNewBeaconMac('');
-  };
-
-  const handleSubmitBeacon = async () => {
-    const trimmedMac = newBeaconMac.trim();
-    if (trimmedMac && !MAC_PATTERN.test(trimmedMac)) {
-      setMessage({ type: 'error', text: 'Beacon MAC must look like AA:BB:CC:DD:EE:FF.' });
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('tools')
-      .update({
-        beacon_mac: trimmedMac ? trimmedMac.toUpperCase() : null,
-        beacon_alarm_active: false,
-        beacon_last_seen: null,
-      })
-      .eq('id', tool.id)
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === '23505') {
-        setMessage({ type: 'error', text: 'That beacon MAC is already assigned to another tool.' });
-      } else {
-        setMessage({ type: 'error', text: error.message });
-      }
-      return;
-    }
-
-    setTool(data);
-    setAssigningBeacon(false);
-    setScanningBeaconMac(false);
-    setNewBeaconMac('');
-    setMessage({ type: 'success', text: trimmedMac ? 'Beacon assigned.' : 'Beacon removed.' });
-  };
-
   const handleStartAssignRfidTags = () => {
     setNewRfidTag('');
     setMessage(null);
     setAssigningQr(false);
     setAssigningLocation(false);
-    setAssigningBeacon(false);
-    setScanningBeaconMac(false);
     setUpdatingPhoto(false);
     setEditingName(false);
     setAssigningRfidTags(true);
@@ -382,8 +276,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage(null);
     setAssigningQr(false);
     setAssigningLocation(false);
-    setAssigningBeacon(false);
-    setScanningBeaconMac(false);
     setAssigningRfidTags(false);
     setUpdatingPhoto(false);
     setEditingName(true);
@@ -437,8 +329,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
     setMessage(null);
     setAssigningQr(false);
     setAssigningLocation(false);
-    setAssigningBeacon(false);
-    setScanningBeaconMac(false);
     setAssigningRfidTags(false);
     setEditingName(false);
     setUpdatingPhoto(true);
@@ -658,14 +548,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>QR Code:</strong> {tool.qr_code || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Location:</strong> {tool.location || '—'}</p>
           <p style={{ color: colors.textMuted }}><strong style={{ color: colors.white }}>Status:</strong> {status}</p>
-          {BEACON_FEATURE_ENABLED && tool.beacon_mac && (
-            <p style={{ color: colors.textMuted }}>
-              <strong style={{ color: colors.white }}>Beacon:</strong> {tool.beacon_mac}
-              {tool.beacon_alarm_active && (
-                <span style={{ color: '#ff8080', fontWeight: 'bold', marginLeft: '0.5rem' }}>⚠ Near door</span>
-              )}
-            </p>
-          )}
           {RFID_TAG_ASSIGNMENT_ENABLED && (
             <p style={{ color: colors.textMuted }}>
               <strong style={{ color: colors.white }}>RFID Tags:</strong> {rfidTags.length > 0 ? rfidTags.join(', ') : '—'}
@@ -735,11 +617,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               <button onClick={handleStartAssignLocation} style={{ ...(assigningLocation ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                 Assign Location
               </button>
-              {BEACON_FEATURE_ENABLED && isAdmin && (
-                <button onClick={handleStartAssignBeacon} style={{ ...(assigningBeacon ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
-                  {tool.beacon_mac ? 'Edit Beacon' : 'Assign Beacon'}
-                </button>
-              )}
               {RFID_TAG_ASSIGNMENT_ENABLED && isAdmin && (
                 <button onClick={handleStartAssignRfidTags} style={{ ...(assigningRfidTags ? btnStyle : secondaryBtnStyle), marginTop: 0 }}>
                   Assign RFID Tags
@@ -823,40 +700,6 @@ function ToolDetail({ toolId, isAdmin, techProfile, onHome, onBackToStatus, onSe
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button onClick={handleSubmitLocation} style={btnStyle}>Submit</button>
                 <button onClick={handleCancelAssignLocation} style={secondaryBtnStyle}>Cancel</button>
-              </div>
-            </div>
-          )}
-
-          {BEACON_FEATURE_ENABLED && isAdmin && assigningBeacon && (
-            <div ref={beaconPanelRef} style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: `0.5px solid ${colors.navyBorder}` }}>
-              <label style={{ display: 'block', color: colors.white, fontWeight: 'bold', marginBottom: '0.35rem' }}>
-                Beacon MAC Address
-              </label>
-              <input
-                type="text"
-                value={newBeaconMac}
-                onChange={(e) => setNewBeaconMac(formatMacInput(e.target.value))}
-                placeholder="AA:BB:CC:DD:EE:FF"
-                style={{
-                  width: '100%', padding: '0.6rem', borderRadius: '6px', border: 'none', marginBottom: '0.5rem', boxSizing: 'border-box',
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setScanningBeaconMac((v) => !v)}
-                style={{ ...(scanningBeaconMac ? btnStyle : secondaryBtnStyle), marginTop: 0, marginBottom: '0.75rem' }}
-              >
-                {scanningBeaconMac ? 'Cancel Scan' : 'Scan Beacon QR Code'}
-              </button>
-              {scanningBeaconMac && (
-                <div id="beacon-qr-reader" style={{ width: '100%', marginBottom: '0.75rem' }}></div>
-              )}
-              <p style={{ fontSize: '0.8rem', color: colors.textMuted, marginTop: 0, marginBottom: '0.75rem' }}>
-                The board sits at the shop door and sounds the buzzer when this tool is Available and its beacon gets close. The alarm distance is set once for all tools in Beacon Settings, not per tool. Leave the MAC blank and submit to remove the beacon.
-              </p>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button onClick={handleSubmitBeacon} style={btnStyle}>Submit</button>
-                <button onClick={handleCancelAssignBeacon} style={secondaryBtnStyle}>Cancel</button>
               </div>
             </div>
           )}

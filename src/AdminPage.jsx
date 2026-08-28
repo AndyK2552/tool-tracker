@@ -3,10 +3,8 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { supabase } from './supabaseClient';
 import { useCameraCapture } from './useCameraCapture';
 import { safeStopScanner, safePauseScanner, applyDefaultZoom } from './qrScannerUtils';
-import { formatMacInput, MAC_PATTERN } from './macFormat';
 import PageHeader from './PageHeader';
 import { colors, btnStyle, secondaryBtnStyle } from './theme';
-import { BEACON_FEATURE_ENABLED } from './featureFlags';
 
 function AdminPage({ onHome, onSelectTool }) {
   const [name, setName] = useState('');
@@ -18,11 +16,8 @@ function AdminPage({ onHome, onSelectTool }) {
   const [toolPhoto, setToolPhoto] = useState(null);
   const [assigningQr, setAssigningQr] = useState(false);
   const [qrCode, setQrCode] = useState('');
-  const [beaconMac, setBeaconMac] = useState('');
-  const [scanningBeaconMac, setScanningBeaconMac] = useState(false);
   const scannerRef = useRef(null);
   const qrPanelRef = useRef(null);
-  const beaconQrPanelRef = useRef(null);
   const messageRef = useRef(null);
 
   useEffect(() => {
@@ -106,43 +101,6 @@ function AdminPage({ onHome, onSelectTool }) {
     return () => observer.disconnect();
   }, [assigningQr]);
 
-  useEffect(() => {
-    if (!scanningBeaconMac) return;
-
-    const scanner = new Html5Qrcode('beacon-qr-add-reader');
-    scannerRef.current = scanner;
-
-    scanner
-      .start(
-        { facingMode: 'environment' },
-        { fps: 10 },
-        (decodedText) => {
-          setBeaconMac(formatMacInput(decodedText));
-          setScanningBeaconMac(false);
-        },
-        () => {}
-      )
-      .then(() => applyDefaultZoom(scanner))
-      .catch((err) => {
-        setMessage({ type: 'error', text: 'Could not start camera: ' + err });
-        setScanningBeaconMac(false);
-      });
-
-    return () => {
-      safeStopScanner(scanner);
-    };
-  }, [scanningBeaconMac]);
-
-  useEffect(() => {
-    if (!scanningBeaconMac || !beaconQrPanelRef.current) return;
-    const el = beaconQrPanelRef.current;
-    const observer = new ResizeObserver(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [scanningBeaconMac]);
-
   const handleAddTool = async (e) => {
     e.preventDefault();
     setMessage(null);
@@ -153,12 +111,6 @@ function AdminPage({ onHome, onSelectTool }) {
     }
     if (!qrCode) {
       setMessage({ type: 'error', text: 'Please assign a QR code before saving.' });
-      return;
-    }
-
-    const trimmedBeaconMac = beaconMac.trim();
-    if (trimmedBeaconMac && !MAC_PATTERN.test(trimmedBeaconMac)) {
-      setMessage({ type: 'error', text: 'Beacon MAC must look like AA:BB:CC:DD:EE:FF.' });
       return;
     }
 
@@ -183,7 +135,6 @@ function AdminPage({ onHome, onSelectTool }) {
         qr_code: qrCode,
         is_checked_out: false,
         condition: 'Ready',
-        beacon_mac: trimmedBeaconMac ? trimmedBeaconMac.toUpperCase() : null,
       });
 
     if (error) {
@@ -204,8 +155,6 @@ function AdminPage({ onHome, onSelectTool }) {
           } else {
             setMessage({ type: 'error', text: 'That QR code is already assigned to another tool.' });
           }
-        } else if (error.message.includes('beacon_mac')) {
-          setMessage({ type: 'error', text: 'That beacon MAC is already assigned to another tool.' });
         } else {
           setMessage({ type: 'error', text: `A tool with serial number "${serial.trim()}" already exists.` });
         }
@@ -222,20 +171,12 @@ function AdminPage({ onHome, onSelectTool }) {
     setLocation('Shop');
     setToolPhoto(null);
     setQrCode('');
-    setBeaconMac('');
     setSaving(false);
   };
 
   const handleStartAssignQr = () => {
     setMessage(null);
-    setScanningBeaconMac(false);
     setAssigningQr(true);
-  };
-
-  const handleStartScanBeaconMac = () => {
-    setMessage(null);
-    setAssigningQr(false);
-    setScanningBeaconMac(true);
   };
 
   const inputStyle = {
@@ -384,39 +325,6 @@ function AdminPage({ onHome, onSelectTool }) {
               </button>
             )}
           </div>
-
-          {BEACON_FEATURE_ENABLED && (
-            <>
-              <label style={fieldLabelStyle}>Beacon (optional)</label>
-              <div style={{ marginBottom: '1rem' }}>
-                <input
-                  type="text"
-                  value={beaconMac}
-                  onChange={(e) => setBeaconMac(formatMacInput(e.target.value))}
-                  placeholder="AA:BB:CC:DD:EE:FF"
-                  style={{ ...inputStyle, marginBottom: '0.5rem' }}
-                />
-                {scanningBeaconMac ? (
-                  <div ref={beaconQrPanelRef}>
-                    <div id="beacon-qr-add-reader" style={{ width: '100%' }}></div>
-                    <p style={{ fontSize: '0.85rem', color: colors.textMuted, marginTop: '0.5rem' }}>
-                      Point the camera at the beacon's QR code — it'll scan automatically.
-                    </p>
-                    <button type="button" onClick={() => setScanningBeaconMac(false)} style={{ ...secondaryBtnStyle, marginTop: '0.5rem' }}>
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={handleStartScanBeaconMac} style={{ ...secondaryBtnStyle, marginBottom: '0.75rem' }}>
-                    Scan Beacon QR Code
-                  </button>
-                )}
-                <p style={{ fontSize: '0.8rem', color: colors.textMuted, margin: '0.5rem 0 0' }}>
-                  The buzzer sounds at the shop door when this tool is Available and its beacon gets close. Alarm distance is set once for all tools in Beacon Settings, not per tool.
-                </p>
-              </div>
-            </>
-          )}
 
           <button type="submit" disabled={saving} style={btnStyle}>
             {saving ? 'Adding...' : 'Add Tool'}

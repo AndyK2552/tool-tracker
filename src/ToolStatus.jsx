@@ -5,7 +5,6 @@ import { getToolStatus, STATUS_DOT_COLORS } from './toolStatus';
 import { formatTechName, fetchTruckNumberByName } from './techDisplay';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
-import { BEACON_FEATURE_ENABLED } from './featureFlags';
 
 const formatDuration = (checkedOutAt) => {
   const utcString = checkedOutAt.endsWith('Z') ? checkedOutAt : checkedOutAt + 'Z';
@@ -124,9 +123,6 @@ function ToolStatus({ onHome, onSelectTool, isAdmin, techName }) {
         <div>
           <span style={{ color: STATUS_DOT_COLORS[toolStatus], marginRight: '0.5rem' }}>●</span>
           <strong style={{ color: colors.white }}>{tool.name}</strong>
-          {BEACON_FEATURE_ENABLED && tool.beacon_alarm_active && (
-            <span style={{ color: '#ff8080', fontWeight: 'bold', marginLeft: '0.5rem' }}>⚠ Near door</span>
-          )}
           <p style={{ fontSize: '0.85rem', color: colors.textMuted, margin: '4px 0 0' }}>
             {tool.id}
             {(statusFilter === 'All' || truckView) && <> — {toolStatus}</>}

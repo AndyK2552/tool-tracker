@@ -12,8 +12,6 @@ import CheckoutHistory from './CheckoutHistory.jsx'
 import ToolDetail from './ToolDetail.jsx'
 import ManageUsers from './ManageUsers.jsx'
 import UserDetail from './UserDetail.jsx'
-import BeaconSettings from './BeaconSettings.jsx'
-import WifiSettings from './WifiSettings.jsx'
 import RfidReconciliation from './RfidReconciliation.jsx'
 import RfidTagAssignment from './RfidTagAssignment.jsx'
 import { colors } from './theme'
@@ -257,14 +255,6 @@ function Root() {
 
   if (view === 'admin') {
     return <AdminPage onHome={() => setView('home')} onSelectTool={selectTool} />
-  }
-
-  if (view === 'beaconSettings') {
-    return <BeaconSettings onHome={() => setView('home')} onWifiSettings={() => setView('wifiSettings')} />
-  }
-
-  if (view === 'wifiSettings') {
-    return <WifiSettings onBack={() => setView('beaconSettings')} onHome={() => setView('home')} />
   }
 
   if (view === 'rfidReconciliation') {
