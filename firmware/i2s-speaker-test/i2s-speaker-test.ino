@@ -360,9 +360,9 @@ static bool downloadSoundIfNeeded(const String& soundPath) {
   http.end();
 
   if (written < 0) {
-    uint64_t freeBytes = FFat.totalBytes() - FFat.usedBytes();
+    uint32_t freeBytes = FFat.totalBytes() - FFat.usedBytes();
     Serial.printf("Download to %s failed mid-stream (error %d) -- removing partial file\n", localPath.c_str(), written);
-    Serial.printf("FFat free space: %llu bytes (this file needed %d)\n", freeBytes, remoteSize);
+    Serial.printf("FFat free space: %u bytes (this file needed %d)\n", freeBytes, remoteSize);
     FFat.remove(localPath);
     return false;
   }
@@ -427,6 +427,7 @@ static void pruneStaleCachedSounds() {
     // which are always bare filenames.
     if (name.startsWith("/")) name = name.substring(1);
     bool isDir = entry.isDirectory();
+    uint32_t size = entry.size();
     entry.close(); // must close before FFat.remove() -- can't remove an open file
 
     if (!isDir) {
@@ -438,9 +439,11 @@ static void pruneStaleCachedSounds() {
         }
       }
       if (!foundRemotely) {
-        Serial.printf("Pruning stale cached file: /%s (not in %s bucket)\n", name.c_str(), SOUND_BUCKET);
+        Serial.printf("Pruning stale cached file: /%s (%u bytes, not in %s bucket)\n", name.c_str(), size, SOUND_BUCKET);
         FFat.remove("/" + name);
         prunedCount++;
+      } else {
+        Serial.printf("Keeping cached file: /%s (%u bytes)\n", name.c_str(), size);
       }
     }
 
@@ -448,7 +451,7 @@ static void pruneStaleCachedSounds() {
   }
   root.close();
 
-  Serial.printf("Pruning done: removed %d stale file(s). FFat: %llu / %llu bytes used\n",
+  Serial.printf("Pruning done: removed %d stale file(s). FFat: %u / %u bytes used\n",
                 prunedCount, FFat.usedBytes(), FFat.totalBytes());
 }
 
@@ -816,7 +819,7 @@ void setup() {
     Serial.println("FFat mount failed -- check Partition Scheme has a FATFS-labeled partition.");
     return;
   }
-  Serial.printf("FFat: %llu / %llu bytes used\n", FFat.usedBytes(), FFat.totalBytes());
+  Serial.printf("FFat: %u / %u bytes used\n", FFat.usedBytes(), FFat.totalBytes());
 
   xTaskCreatePinnedToCore(networkTask, "networkTask", 8192, nullptr, 1, nullptr, 0);
 }
