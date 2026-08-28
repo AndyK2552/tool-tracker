@@ -28,7 +28,10 @@ function SpeakerTest({ onHome }) {
       if (error) {
         setMessage({ type: 'error', text: `Could not list sounds: ${error.message}` });
       } else {
-        setFiles((data || []).filter((f) => f.name.toLowerCase().endsWith('.wav')));
+        setFiles((data || []).filter((f) => {
+          const lower = f.name.toLowerCase();
+          return lower.endsWith('.wav') || lower.endsWith('.mp3');
+        }));
       }
       setLoadingFiles(false);
     };
@@ -265,7 +268,7 @@ function SpeakerTest({ onHome }) {
         {loadingFiles ? (
           <p style={{ color: colors.textMuted }}>Loading sounds...</p>
         ) : files.length === 0 ? (
-          <p style={{ color: colors.textMuted }}>No .wav files found in the "{SOUND_BUCKET}" bucket.</p>
+          <p style={{ color: colors.textMuted }}>No .wav or .mp3 files found in the "{SOUND_BUCKET}" bucket.</p>
         ) : (
           files.map((file) => {
             const isSelected = state?.sound_path === file.name;
