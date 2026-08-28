@@ -723,7 +723,24 @@ static void networkTask(void* param) {
   connectWiFi();
   if (WiFi.status() == WL_CONNECTED) pruneStaleCachedSounds();
 
+  // Don't act on whatever command was last sent before this boot -- e.g. if
+  // the board loses power mid-playback and reboots, it shouldn't
+  // automatically start playing again on its own. Read the current
+  // command_seq once and treat it as already-handled, so only a genuinely
+  // new command issued after this boot gets acted on. Volume is still
+  // picked up from this initial read -- that's a setting, not an action.
   long lastSeenSeq = -1;
+  {
+    long seq = -1;
+    String action, soundPath;
+    int volumePct = 20;
+    float seekSeconds = -1;
+    if (fetchCommand(&seq, &action, &soundPath, &volumePct, &seekSeconds)) {
+      lastSeenSeq = seq;
+      setSharedVolume(volumePct / 100.0f);
+      Serial.printf("Boot: ignoring pre-existing command #%ld (action=%s), waiting for a new one.\n", seq, action.c_str());
+    }
+  }
 
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
