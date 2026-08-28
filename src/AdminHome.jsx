@@ -1,4 +1,4 @@
-import { Camera, ClipboardList, Plus, Clock, Users, Scan, Tag } from 'lucide-react';
+import { Camera, ClipboardList, Plus, Clock, Users, Scan, Tag, Volume2 } from 'lucide-react';
 import { formatTechName } from './techDisplay';
 import { colors } from './theme';
 import PageHeader from './PageHeader';
@@ -41,6 +41,7 @@ function AdminHome({ onNavigate, techName, truckNumber }) {
     { key: 'users', icon: Users, label: 'Manage users' },
     ...(RFID_FEATURE_ENABLED ? [{ key: 'rfidReconciliation', icon: Scan, label: 'RFID reconciliation' }] : []),
     ...(RFID_TAG_ASSIGNMENT_ENABLED ? [{ key: 'rfidTagAssignment', icon: Tag, label: 'Assign RFID tags' }] : []),
+    { key: 'speakerTest', icon: Volume2, label: 'Speaker test' },
   ];
 
   return (

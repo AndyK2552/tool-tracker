@@ -14,6 +14,7 @@ import ManageUsers from './ManageUsers.jsx'
 import UserDetail from './UserDetail.jsx'
 import RfidReconciliation from './RfidReconciliation.jsx'
 import RfidTagAssignment from './RfidTagAssignment.jsx'
+import SpeakerTest from './SpeakerTest.jsx'
 import { colors } from './theme'
 import { installGlobalCrashLogging, getLastCrash, clearLastCrash, logCrash } from './crashLog.js'
 import { useRegisterSW } from 'virtual:pwa-register/react'
@@ -263,6 +264,10 @@ function Root() {
 
   if (view === 'rfidTagAssignment') {
     return <RfidTagAssignment onHome={() => setView('home')} />
+  }
+
+  if (view === 'speakerTest') {
+    return <SpeakerTest onHome={() => setView('home')} />
   }
 
   const selectUser = (id) => {
