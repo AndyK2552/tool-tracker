@@ -5,7 +5,10 @@
 // the app's Speaker Test page, plays WAV files from the `rfid_sounds`
 // Storage bucket (downloaded once, then cached on FFat/FAT storage), and
 // reports playback status back so the app reflects what the board is
-// actually doing, not just the last command sent.
+// actually doing, not just the last command sent. Once at boot, it also
+// prunes any locally cached file that's no longer in the bucket -- files
+// tested and later deleted/renamed in Storage don't just sit around
+// forever eating flash space.
 //
 // Networking (polling Supabase, downloading files) runs on its own
 // FreeRTOS task pinned to the opposite core from the main loop(), same
@@ -368,6 +371,87 @@ static bool downloadSoundIfNeeded(const String& soundPath) {
   return true;
 }
 
+// Lists everything currently in the rfid_sounds bucket (Storage's list
+// endpoint, POST -- unlike the plain GET used to fetch a single object),
+// then deletes any locally cached file that isn't in that list. Run once
+// at boot: every file ever tested otherwise stays cached forever, since
+// downloadSoundIfNeeded() only ever adds/replaces files, never removes
+// ones that got deleted or renamed in Storage -- which is exactly what
+// silently ate the free space needed for a later, larger download.
+static void pruneStaleCachedSounds() {
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  String url = String(SUPABASE_URL) + "/storage/v1/object/list/" + SOUND_BUCKET;
+  http.begin(client, url);
+  http.addHeader("apikey", SUPABASE_SERVICE_ROLE_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_ROLE_KEY);
+  http.addHeader("Content-Type", "application/json");
+
+  JsonDocument reqBody;
+  reqBody["limit"] = 1000;
+  reqBody["prefix"] = "";
+  String reqPayload;
+  serializeJson(reqBody, reqPayload);
+
+  int code = http.POST(reqPayload);
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("Could not list %s bucket for pruning: HTTP %d\n", SOUND_BUCKET, code);
+    http.end();
+    return;
+  }
+
+  String body = http.getString();
+  http.end();
+
+  JsonDocument doc;
+  if (deserializeJson(doc, body)) {
+    Serial.println("Could not parse bucket listing for pruning.");
+    return;
+  }
+  JsonArray remoteFiles = doc.as<JsonArray>();
+
+  File root = FFat.open("/");
+  if (!root || !root.isDirectory()) {
+    Serial.println("Could not open FFat root for pruning.");
+    return;
+  }
+
+  int prunedCount = 0;
+  File entry = root.openNextFile();
+  while (entry) {
+    String name = String(entry.name());
+    // File::name() can come back with or without a leading '/' depending on
+    // core version -- normalize before comparing against bucket entries,
+    // which are always bare filenames.
+    if (name.startsWith("/")) name = name.substring(1);
+    bool isDir = entry.isDirectory();
+    entry.close(); // must close before FFat.remove() -- can't remove an open file
+
+    if (!isDir) {
+      bool foundRemotely = false;
+      for (JsonObject f : remoteFiles) {
+        if (name == (const char*)(f["name"] | "")) {
+          foundRemotely = true;
+          break;
+        }
+      }
+      if (!foundRemotely) {
+        Serial.printf("Pruning stale cached file: /%s (not in %s bucket)\n", name.c_str(), SOUND_BUCKET);
+        FFat.remove("/" + name);
+        prunedCount++;
+      }
+    }
+
+    entry = root.openNextFile();
+  }
+  root.close();
+
+  Serial.printf("Pruning done: removed %d stale file(s). FFat: %llu / %llu bytes used\n",
+                prunedCount, FFat.usedBytes(), FFat.totalBytes());
+}
+
 // ---------- I2S ----------
 
 static void setupI2S(uint32_t sampleRate) {
@@ -637,6 +721,7 @@ static void pumpPlayback() {
 static void networkTask(void* param) {
   scanAndLogNetworks();
   connectWiFi();
+  if (WiFi.status() == WL_CONNECTED) pruneStaleCachedSounds();
 
   long lastSeenSeq = -1;
 
