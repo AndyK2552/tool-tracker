@@ -17,9 +17,14 @@ import RfidTagAssignment from './RfidTagAssignment.jsx'
 import SpeakerTest from './SpeakerTest.jsx'
 import { colors } from './theme'
 import { installGlobalCrashLogging, getLastCrash, clearLastCrash, logCrash } from './crashLog.js'
+import { logAuthEvent, parseAuthParamsFromLocation } from './authDebugLog.js'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 installGlobalCrashLogging()
+
+// Captured at module load, before Supabase's own URL processing can strip
+// or clean up the callback params — this is the only chance to see them.
+logAuthEvent('page_load', parseAuthParamsFromLocation())
 
 class ErrorBoundary extends Component {
   state = { error: null }
@@ -146,7 +151,8 @@ function Root() {
   const hadSessionRef = useRef(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      logAuthEvent('initial_getSession', { hasSession: !!session, error: error?.message || null })
       setSession(session)
       hadSessionRef.current = !!session
       if (session) {
@@ -156,6 +162,7 @@ function Root() {
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      logAuthEvent('onAuthStateChange', { event, hasSession: !!session })
       setSession(session)
 
       // Supabase re-fires SIGNED_IN when revalidating an existing session on
