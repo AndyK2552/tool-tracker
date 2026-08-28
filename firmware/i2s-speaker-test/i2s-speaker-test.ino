@@ -3,9 +3,9 @@
 // Polls a single-row `speaker_test` table in Supabase (see
 // ../../sql/add_speaker_test_table.sql) for play/pause commands sent from
 // the app's Speaker Test page, plays WAV files from the `rfid_sounds`
-// Storage bucket (downloaded once, then cached on LittleFS), and reports
-// playback status back so the app reflects what the board is actually
-// doing, not just the last command sent.
+// Storage bucket (downloaded once, then cached on FFat/FAT storage), and
+// reports playback status back so the app reflects what the board is
+// actually doing, not just the last command sent.
 //
 // Networking (polling Supabase, downloading files) runs on its own
 // FreeRTOS task pinned to the opposite core from the main loop(), same
@@ -38,10 +38,14 @@
 //      details (SUPABASE_SERVICE_ROLE_KEY, not the anon key -- same
 //      reasoning as shop-beacon-monitor used: RLS only allows admin
 //      access, so the board needs the key that bypasses it).
-//   4. Make sure your board's Partition Scheme reserves a filesystem
-//      partition LittleFS can use -- e.g. "Default 4MB with spiffs". A
-//      FATFS-labeled scheme instead reserves a FAT partition, which
-//      LittleFS.begin() can't mount.
+//   4. Set Partition Scheme to a FATFS-labeled scheme with plenty of room --
+//      e.g. "16M Flash (2MB APP/12.5MB FATFS)" on this board's 16MB flash.
+//      WAV files add up fast (roughly 32KB/sec for 16-bit mono 16kHz), so
+//      the small "spiffs"-labeled schemes (1.5-3MB) fill up after just one
+//      or two files -- that's the "No more free space" error from
+//      esp_littlefs/FFat if you see it. A SPIFFS/LittleFS-labeled scheme
+//      instead of a FATFS one will fail to mount entirely, since this
+//      sketch uses the FFat library.
 //   5. Flash this sketch, open Serial Monitor at 115200 baud, and use the
 //      app's Speaker Test page (Admin Home -> Speaker test).
 //
@@ -53,7 +57,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <LittleFS.h>
+#include <FFat.h>
 #include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -268,7 +272,7 @@ static void patchStatus(const char* status, const char* statusDetail) {
 // the earlier version of this sketch, the bucket doesn't need to be public.
 static bool downloadSoundIfMissing(const String& soundPath) {
   String localPath = "/" + soundPath;
-  if (LittleFS.exists(localPath)) return true;
+  if (FFat.exists(localPath)) return true;
 
   WiFiClientSecure client;
   client.setInsecure();
@@ -286,7 +290,7 @@ static bool downloadSoundIfMissing(const String& soundPath) {
     return false;
   }
 
-  File f = LittleFS.open(localPath, "w");
+  File f = FFat.open(localPath, "w");
   if (!f) {
     Serial.printf("Could not open %s for writing\n", localPath.c_str());
     http.end();
@@ -299,7 +303,7 @@ static bool downloadSoundIfMissing(const String& soundPath) {
 
   if (written < 0) {
     Serial.printf("Download to %s failed mid-stream (error %d) -- removing partial file\n", localPath.c_str(), written);
-    LittleFS.remove(localPath);
+    FFat.remove(localPath);
     return false;
   }
 
@@ -424,7 +428,7 @@ static void startPlayback(const char* soundPath) {
   stopPlayback();
 
   String localPath = "/" + String(soundPath);
-  File f = LittleFS.open(localPath, "r");
+  File f = FFat.open(localPath, "r");
   if (!f) {
     Serial.printf("Could not open %s\n", localPath.c_str());
     return;
@@ -590,8 +594,8 @@ void setup() {
 
   stateMutex = xSemaphoreCreateMutex();
 
-  if (!LittleFS.begin(true)) { // true = format if mount fails (first boot)
-    Serial.println("LittleFS mount failed -- check Partition Scheme has a filesystem partition.");
+  if (!FFat.begin(true)) { // true = format if mount fails (first boot)
+    Serial.println("FFat mount failed -- check Partition Scheme has a FATFS-labeled partition.");
     return;
   }
 
