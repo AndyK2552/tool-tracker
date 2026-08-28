@@ -137,13 +137,17 @@ static float getSharedVolume() {
 // ---------- WiFi ----------
 
 static void connectWiFi() {
-  // Disconnect first, even on the very first call -- retrying WiFi.begin()
+  // Put the radio in station mode before touching it further -- calling
+  // disconnect() first, before the driver has ever been put into STA mode
+  // (e.g. on the very first boot), is the wrong order and can itself cause
+  // a connection to fail to even start.
+  WiFi.mode(WIFI_STA);
+  // Then clear any stale state before (re)trying -- retrying WiFi.begin()
   // while the driver hasn't fully settled from a previous attempt produces
   // "wifi:sta is connecting, cannot set config" and makes the retry itself
   // unreliable.
-  WiFi.disconnect(true, true);
+  WiFi.disconnect(true);
   delay(100);
-  WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi...");
   unsigned long start = millis();
