@@ -16,7 +16,9 @@ function SpeakerTest({ onHome }) {
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [state, setState] = useState(null);
   const [message, setMessage] = useState(null);
+  const [localVolume, setLocalVolume] = useState(20);
   const commandSeqRef = useRef(0);
+  const volumeDebounceRef = useRef(null);
 
   useEffect(() => {
     const fetchFiles = async () => {
@@ -37,6 +39,7 @@ function SpeakerTest({ onHome }) {
       if (data) {
         setState(data);
         commandSeqRef.current = data.command_seq;
+        setLocalVolume(data.volume);
       }
     };
     fetchState();
@@ -75,6 +78,22 @@ function SpeakerTest({ onHome }) {
   const handlePlay = (file) => sendCommand('play', file.name);
   const handlePause = () => sendCommand('pause');
 
+  // Updates the slider instantly for a responsive feel, but only writes to
+  // Supabase after the user stops dragging -- the board applies volume on
+  // every ~1s poll regardless of command_seq, so there's no reason to spam
+  // it with a write per pixel of drag.
+  const handleVolumeChange = (e) => {
+    const v = Number(e.target.value);
+    setLocalVolume(v);
+    clearTimeout(volumeDebounceRef.current);
+    volumeDebounceRef.current = setTimeout(async () => {
+      const { error } = await supabase.from('speaker_test').update({ volume: v }).eq('id', true);
+      if (error) setMessage({ type: 'error', text: error.message });
+    }, 300);
+  };
+
+  useEffect(() => () => clearTimeout(volumeDebounceRef.current), []);
+
   const boardOnline = state?.board_last_seen && Date.now() - new Date(state.board_last_seen).getTime() < BOARD_OFFLINE_THRESHOLD_MS;
 
   const boardStatusStyle = {
@@ -111,6 +130,20 @@ function SpeakerTest({ onHome }) {
               {state.status === 'error' && state.status_detail ? `: ${state.status_detail}` : ''}
             </span>
           )}
+        </div>
+
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label style={{ display: 'block', color: colors.white, fontSize: '14px', marginBottom: '0.35rem' }}>
+            Volume: {localVolume}%
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={localVolume}
+            onChange={handleVolumeChange}
+            style={{ width: '100%' }}
+          />
         </div>
 
         {message && (

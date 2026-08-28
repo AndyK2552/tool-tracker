@@ -71,12 +71,6 @@
 
 #define COMMAND_POLL_INTERVAL_MS 1000UL
 
-// Software volume: this board doesn't break out the amp's hardware gain
-// pin, so volume is controlled by scaling samples here instead. 1.0 = full
-// volume from the source file, 0.0 = silent. Keep at or below 1.0 -- scaling
-// above that can clip (wrap around) instead of getting louder.
-#define VOLUME 0.1f
-
 enum PlaybackStatus { STATUS_IDLE, STATUS_PLAYING, STATUS_PAUSED };
 
 // ---------- Cross-task shared state ----------
@@ -93,6 +87,12 @@ static char pendingPlayPath[80] = "";
 static bool pendingPause = false;
 
 static PlaybackStatus sharedStatus = STATUS_IDLE;
+
+// This board doesn't break out the amp's hardware gain pin, so volume is
+// controlled by scaling samples in software instead -- set from the app's
+// Speaker Test slider (0-100), applied every poll cycle regardless of
+// command_seq (see fetchCommand()). 1.0 = full volume from the source file.
+static float sharedVolume = 0.2f;
 
 static void requestPlay(const String& path) {
   xSemaphoreTake(stateMutex, portMAX_DELAY);
@@ -119,6 +119,19 @@ static PlaybackStatus getSharedStatus() {
   PlaybackStatus s = sharedStatus;
   xSemaphoreGive(stateMutex);
   return s;
+}
+
+static void setSharedVolume(float v) {
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  sharedVolume = v;
+  xSemaphoreGive(stateMutex);
+}
+
+static float getSharedVolume() {
+  xSemaphoreTake(stateMutex, portMAX_DELAY);
+  float v = sharedVolume;
+  xSemaphoreGive(stateMutex);
+  return v;
 }
 
 // ---------- WiFi ----------
@@ -151,12 +164,12 @@ static bool nowIso8601(char* out, size_t outLen) {
 
 // ---------- Supabase ----------
 
-static bool fetchCommand(long* outSeq, String* outAction, String* outSoundPath) {
+static bool fetchCommand(long* outSeq, String* outAction, String* outSoundPath, int* outVolumePct) {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
 
-  String url = String(SUPABASE_URL) + "/rest/v1/speaker_test?id=eq.true&select=command_seq,action,sound_path";
+  String url = String(SUPABASE_URL) + "/rest/v1/speaker_test?id=eq.true&select=command_seq,action,sound_path,volume";
   http.begin(client, url);
   http.addHeader("apikey", SUPABASE_SERVICE_ROLE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_ROLE_KEY);
@@ -176,6 +189,7 @@ static bool fetchCommand(long* outSeq, String* outAction, String* outSoundPath) 
         *outSeq = row["command_seq"] | -1L;
         *outAction = String((const char*)(row["action"] | ""));
         *outSoundPath = String((const char*)(row["sound_path"] | ""));
+        *outVolumePct = row["volume"] | 20;
         ok = true;
       }
     }
@@ -467,6 +481,7 @@ static void pumpPlayback() {
     return;
   }
 
+  float volume = getSharedVolume(); // one mutex take per buffer, not per sample
   for (size_t i = 0; i < framesRead; i++) {
     int16_t left, right;
     if (playback.numChannels == 1) {
@@ -475,8 +490,8 @@ static void pumpPlayback() {
       left = srcBuf[i * 2];
       right = srcBuf[i * 2 + 1];
     }
-    stereoBuf[i * 2] = (int16_t)(left * VOLUME);
-    stereoBuf[i * 2 + 1] = (int16_t)(right * VOLUME);
+    stereoBuf[i * 2] = (int16_t)(left * volume);
+    stereoBuf[i * 2 + 1] = (int16_t)(right * volume);
   }
 
   size_t bytesWritten;
@@ -497,19 +512,24 @@ static void networkTask(void* param) {
 
     long seq = -1;
     String action, soundPath;
-    if (fetchCommand(&seq, &action, &soundPath) && seq >= 0 && seq != lastSeenSeq) {
-      lastSeenSeq = seq;
-      Serial.printf("New command #%ld: action=%s sound_path=%s\n", seq, action.c_str(), soundPath.c_str());
+    int volumePct = 20;
+    if (fetchCommand(&seq, &action, &soundPath, &volumePct)) {
+      setSharedVolume(volumePct / 100.0f);
 
-      if (action == "play" && soundPath.length() > 0) {
-        patchStatus("downloading", "");
-        if (downloadSoundIfMissing(soundPath)) {
-          requestPlay(soundPath);
-        } else {
-          patchStatus("error", "download failed");
+      if (seq >= 0 && seq != lastSeenSeq) {
+        lastSeenSeq = seq;
+        Serial.printf("New command #%ld: action=%s sound_path=%s\n", seq, action.c_str(), soundPath.c_str());
+
+        if (action == "play" && soundPath.length() > 0) {
+          patchStatus("downloading", "");
+          if (downloadSoundIfMissing(soundPath)) {
+            requestPlay(soundPath);
+          } else {
+            patchStatus("error", "download failed");
+          }
+        } else if (action == "pause") {
+          requestPause();
         }
-      } else if (action == "pause") {
-        requestPause();
       }
     }
 
