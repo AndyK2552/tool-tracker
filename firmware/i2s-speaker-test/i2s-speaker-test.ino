@@ -66,21 +66,26 @@
 //   5. Flash this sketch, open Serial Monitor at 115200 baud, and use the
 //      app's Speaker Test page (Admin Home -> Speaker test).
 //
-// Targets Arduino-ESP32 core 3.x. WAV playback uses the legacy driver/i2s.h
-// API directly (still present in core 3.x, just deprecated) since it's the
-// most widely documented I2S API for this kind of module; MP3 playback
-// goes through ESP8266Audio's own AudioOutputI2S instead.
+// Targets Arduino-ESP32 core 3.x. Both formats play through ESP8266Audio's
+// AudioOutputI2S -- ESP-IDF does not allow the legacy driver/i2s.h API and
+// the new i2s driver (which AudioOutputI2S uses internally) to coexist in
+// the same firmware at all, even if only one is ever active at a time;
+// mixing them aborts immediately with "CONFLICT! The new i2s driver can't
+// work along with the legacy i2s driver" the moment either tries to
+// install. An earlier version of this sketch hand-rolled WAV playback
+// against the legacy API directly and hit exactly that the moment MP3
+// support (and AudioOutputI2S with it) was added.
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <FFat.h>
-#include <driver/i2s.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
 #include <AudioFileSourceFS.h>
+#include <AudioGeneratorWAV.h>
 #include <AudioGeneratorMP3.h>
 #include <AudioOutputI2S.h>
 
@@ -89,8 +94,6 @@
 #define I2S_BCLK_PIN 5
 #define I2S_LRC_PIN  6
 #define I2S_DOUT_PIN 4
-
-#define I2S_PORT I2S_NUM_0
 
 #define SOUND_BUCKET "rfid_sounds"
 
@@ -473,38 +476,16 @@ static void pruneStaleCachedSounds() {
                 prunedCount, FFat.usedBytes(), FFat.totalBytes());
 }
 
-// ---------- I2S ----------
-
-static void setupI2S(uint32_t sampleRate) {
-  i2s_config_t i2s_config = {
-    .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-    .sample_rate = sampleRate,
-    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-    .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
-    .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-    .dma_buf_count = 8,
-    .dma_buf_len = 256,
-    .use_apll = false,
-    .tx_desc_auto_clear = true,
-    .fixed_mclk = 0
-  };
-  i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
-
-  i2s_pin_config_t pin_config = {
-    .mck_io_num = I2S_PIN_NO_CHANGE,
-    .bck_io_num = I2S_BCLK_PIN,
-    .ws_io_num = I2S_LRC_PIN,
-    .data_out_num = I2S_DOUT_PIN,
-    .data_in_num = I2S_PIN_NO_CHANGE
-  };
-  i2s_set_pin(I2S_PORT, &pin_config);
-}
-
-// Walks RIFF sub-chunks looking for "fmt " and "data" -- doesn't assume
-// "data" immediately follows "fmt " since some WAV writers insert extra
-// chunks (LIST, etc.) between them. Leaves the file positioned at the
-// start of the PCM samples on success.
+// ---------- WAV validation ----------
+//
+// Not used for playback anymore (see the note above the includes) -- only
+// to validate a WAV file before handing it to AudioGeneratorWAV, and to
+// measure sampleRate/numChannels/dataSize for exact duration/seek math.
+// Rejects anything that isn't plain 16-bit PCM with a clear reason instead
+// of AudioGeneratorWAV failing silently or in a way that's hard to
+// diagnose from Serial output alone. Walks RIFF sub-chunks rather than
+// assuming "data" immediately follows "fmt " since some WAV writers insert
+// extra chunks (LIST, etc.) between them.
 static bool parseWavHeader(File& file, uint32_t* sampleRate, uint16_t* bitsPerSample,
                             uint16_t* numChannels, uint32_t* dataSize) {
   char riff[4], wave[4];
@@ -559,166 +540,15 @@ static bool parseWavHeader(File& file, uint32_t* sampleRate, uint16_t* bitsPerSa
   return true;
 }
 
-// ---------- Playback (loop()-task only -- no locking needed here) ----------
-
-struct {
-  File file;
-  bool open = false;
-  bool paused = false;
-  uint16_t numChannels = 0;
-  uint32_t sampleRate = 0;
-  uint32_t bytesRemaining = 0;
-  uint32_t totalDataSize = 0;   // dataSize at the start of the file, for position/duration math
-  uint32_t dataStartOffset = 0; // absolute file position where PCM samples begin, for seeking
-} playback;
-
-static char currentSoundPath[80] = "";
-static bool currentIsMp3 = false;
-
-static bool isMp3Path(const char* soundPath) {
-  String lower(soundPath);
-  lower.toLowerCase();
-  return lower.endsWith(".mp3");
-}
-
-static const size_t BUF_FRAMES = 512; // one "frame" = one sample per channel
-static int16_t srcBuf[BUF_FRAMES * 2];
-static int16_t stereoBuf[BUF_FRAMES * 2];
-
-static void stopWavPlayback() {
-  if (playback.open) {
-    playback.file.close();
-    i2s_driver_uninstall(I2S_PORT);
-  }
-  playback.open = false;
-  playback.paused = false;
-}
-
-static void startWavPlayback(const char* soundPath) {
-  String localPath = "/" + String(soundPath);
-  File f = FFat.open(localPath, "r");
-  if (!f) {
-    Serial.printf("Could not open %s\n", localPath.c_str());
-    return;
-  }
-
-  uint32_t sampleRate = 0, dataSize = 0;
-  uint16_t bitsPerSample = 0, numChannels = 0;
-  if (!parseWavHeader(f, &sampleRate, &bitsPerSample, &numChannels, &dataSize)) {
-    f.close();
-    return;
-  }
-
-  setupI2S(sampleRate);
-
-  playback.file = f;
-  playback.open = true;
-  playback.paused = false;
-  playback.numChannels = numChannels;
-  playback.sampleRate = sampleRate;
-  playback.bytesRemaining = dataSize;
-  playback.totalDataSize = dataSize;
-  playback.dataStartOffset = f.position(); // parseWavHeader left the file positioned right at the first PCM sample
-  strncpy(currentSoundPath, soundPath, sizeof(currentSoundPath) - 1);
-  currentSoundPath[sizeof(currentSoundPath) - 1] = '\0';
-
-  size_t bytesPerFrame = numChannels * sizeof(int16_t);
-  float durationSeconds = (float)dataSize / (sampleRate * bytesPerFrame);
-  setSharedPosition(0, durationSeconds);
-  setSharedStatus(STATUS_PLAYING);
-  Serial.printf("Playing %s: %lu Hz, %u-bit, %u channel(s), %.1fs\n", soundPath, sampleRate, bitsPerSample, numChannels, durationSeconds);
-}
-
-// Repositions within the currently open file -- e.g. from the app's
-// scrubber. Byte offset is rounded down to a whole frame so playback
-// doesn't end up reading a partial (misaligned) sample.
-static void seekWavPlayback(float seconds) {
-  if (!playback.open) return;
-
-  size_t bytesPerFrame = playback.numChannels * sizeof(int16_t);
-  uint32_t targetOffset = (uint32_t)(seconds * playback.sampleRate) * bytesPerFrame;
-  if (targetOffset > playback.totalDataSize) targetOffset = playback.totalDataSize;
-
-  playback.file.seek(playback.dataStartOffset + targetOffset);
-  playback.bytesRemaining = playback.totalDataSize - targetOffset;
-
-  float durationSeconds = (float)playback.totalDataSize / (playback.sampleRate * bytesPerFrame);
-  setSharedPosition(seconds, durationSeconds);
-}
-
-// Writes one buffer's worth of samples, called every loop() iteration when
-// a WAV is the active file. i2s_write can briefly block waiting for DMA
-// buffer space (bounded, milliseconds) but never touches the network, so a
-// slow/stalled HTTPS request on the other task can never cause an audio
-// glitch here.
-static void pumpWavPlayback() {
-  if (!playback.open || playback.paused) return;
-
-  size_t bytesPerFrame = playback.numChannels * sizeof(int16_t);
-  size_t framesAvailable = playback.bytesRemaining / bytesPerFrame;
-  size_t framesToRead = framesAvailable < BUF_FRAMES ? framesAvailable : BUF_FRAMES;
-
-  if (framesToRead == 0 || !playback.file.available()) {
-    stopPlayback();
-    Serial.println("Playback finished.");
-    return;
-  }
-
-  size_t bytesRead = playback.file.read((uint8_t*)srcBuf, framesToRead * bytesPerFrame);
-  size_t framesRead = bytesRead / bytesPerFrame;
-  playback.bytesRemaining -= bytesRead;
-  if (framesRead == 0) {
-    stopPlayback();
-    return;
-  }
-
-  float volume = getSharedVolume(); // one mutex take per buffer, not per sample
-  for (size_t i = 0; i < framesRead; i++) {
-    int16_t left, right;
-    if (playback.numChannels == 1) {
-      left = right = srcBuf[i];
-    } else {
-      left = srcBuf[i * 2];
-      right = srcBuf[i * 2 + 1];
-    }
-    stereoBuf[i * 2] = (int16_t)(left * volume);
-    stereoBuf[i * 2 + 1] = (int16_t)(right * volume);
-  }
-
-  size_t bytesWritten;
-  i2s_write(I2S_PORT, stereoBuf, framesRead * 4, &bytesWritten, portMAX_DELAY);
-
-  float positionSeconds = (float)(playback.totalDataSize - playback.bytesRemaining) / (playback.sampleRate * bytesPerFrame);
-  float durationSeconds = (float)playback.totalDataSize / (playback.sampleRate * bytesPerFrame);
-  setSharedPosition(positionSeconds, durationSeconds);
-}
-
-// ---------- MP3 playback (via ESP8266Audio) ----------
+// ---------- MP3 bitrate estimation ----------
 //
-// WAV playback above is fully custom and stays that way -- it's proven and
-// gives exact seeking. MP3 needs actual decoding, which isn't worth hand-
-// rolling, so this uses ESP8266Audio's Helix decoder instead. Only one
-// pipeline is ever active -- switching formats fully tears down whichever
-// one owned the I2S peripheral first (see the stopPlayback()/startPlayback()
-// dispatchers below).
-//
-// Position is tracked by wall-clock elapsed time rather than bytes
-// consumed (AudioFileSourceFS doesn't expose a running byte position
-// through this library's API), so it drifts a little from true audio
-// position over a long clip -- fine for a scrubber, not sample-exact.
-
-static AudioFileSourceFS* mp3Source = nullptr;
-static AudioGeneratorMP3* mp3Generator = nullptr;
-static AudioOutputI2S* mp3Output = nullptr;
-
-static bool mp3Open = false;
-static bool mp3Paused = false;
-static uint32_t mp3FileSize = 0;
-static uint32_t mp3DataStartOffset = 0; // past any ID3v2 tag
-static uint32_t mp3BytesPerSecond = 0;  // from the first frame's bitrate, assumed constant
-static float mp3DurationSeconds = 0;
-static float mp3PositionBaseSeconds = 0; // position as of mp3PositionBaseMs
-static unsigned long mp3PositionBaseMs = 0;
+// MP3 needs an actual decoder (ESP8266Audio's Helix decoder, below), but
+// duration/seeking need a bytes-per-second figure the decoder itself
+// doesn't hand back. This reads the bitrate out of the first MPEG1 Layer
+// III frame after skipping any ID3v2 tag, and assumes it holds for the
+// whole file -- accurate for constant-bitrate exports (ffmpeg's default),
+// off for true variable-bitrate files. Full VBR-aware duration would mean
+// scanning every frame in the file, which isn't worth it here.
 
 // MPEG1 Layer III bitrate table (kbps) indexed by the header's 4-bit
 // bitrate index; index 0 ("free" bitrate) and 15 (reserved) aren't handled.
@@ -726,10 +556,6 @@ static const int MP3_BITRATES_KBPS[16] = {
   0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0
 };
 
-// Skips a leading ID3v2 tag if present, then scans for the first MPEG1
-// Layer III frame sync to read its bitrate. Only needs to be right once,
-// at the start of a file, not per-frame -- full VBR-aware duration would
-// mean scanning every frame in the file, which isn't worth it here.
 static bool estimateMp3Bitrate(File& f, uint32_t* outDataStart, uint32_t* outBytesPerSecond) {
   uint8_t header[10];
   if (f.read(header, 10) != 10) return false;
@@ -762,26 +588,106 @@ static bool estimateMp3Bitrate(File& f, uint32_t* outDataStart, uint32_t* outByt
   return false;
 }
 
-static void stopMp3Playback() {
-  if (mp3Generator) {
-    if (mp3Generator->isRunning()) mp3Generator->stop();
-    delete mp3Generator;
-    mp3Generator = nullptr;
-  }
-  if (mp3Output) {
-    mp3Output->stop();
-    delete mp3Output;
-    mp3Output = nullptr;
-  }
-  if (mp3Source) {
-    delete mp3Source;
-    mp3Source = nullptr;
-  }
-  mp3Open = false;
-  mp3Paused = false;
+// ---------- Playback (loop()-task only -- no locking needed here) ----------
+//
+// WAV and MP3 both go through the same ESP8266Audio Source/Generator/
+// Output pipeline and the same single AudioOutputI2S instance -- see the
+// note above the includes for why there's no separate hand-rolled I2S path
+// for WAV anymore. Seeking works the same way for both: stop the current
+// generator, seek the underlying file source to a computed byte offset,
+// and start a fresh generator instance against it, rather than trying to
+// reposition mid-stream -- both generators resync from a fresh start far
+// more reliably than from having their internal state poked directly.
+
+static bool isMp3Path(const char* soundPath) {
+  String lower(soundPath);
+  lower.toLowerCase();
+  return lower.endsWith(".mp3");
 }
 
-static void startMp3Playback(const char* soundPath) {
+enum AudioFormat { FORMAT_WAV, FORMAT_MP3 };
+
+static AudioFileSourceFS* audioSource = nullptr;
+static AudioGenerator* audioGenerator = nullptr;
+static AudioOutputI2S* audioOutput = nullptr;
+
+static AudioFormat currentFormat = FORMAT_WAV;
+static bool audioOpen = false;
+static bool audioPaused = false;
+static uint32_t audioDataStartOffset = 0;  // absolute byte offset where audio payload starts (past header/tag)
+static uint32_t audioTotalDataSize = 0;    // bytes of actual audio payload, excluding header/tag
+static uint32_t audioBytesPerSecond = 0;   // WAV: exact. MP3: estimated from the first frame.
+static float audioDurationSeconds = 0;
+static float audioPositionBaseSeconds = 0; // position as of audioPositionBaseMs; frozen while paused
+static unsigned long audioPositionBaseMs = 0;
+
+static char currentSoundPath[80] = "";
+
+static void stopPlayback() {
+  if (audioGenerator) {
+    if (audioGenerator->isRunning()) audioGenerator->stop();
+    delete audioGenerator;
+    audioGenerator = nullptr;
+  }
+  if (audioOutput) {
+    audioOutput->stop();
+    delete audioOutput;
+    audioOutput = nullptr;
+  }
+  if (audioSource) {
+    delete audioSource;
+    audioSource = nullptr;
+  }
+  audioOpen = false;
+  audioPaused = false;
+  currentSoundPath[0] = '\0';
+  setSharedStatus(STATUS_IDLE);
+  setSharedPosition(0, 0);
+}
+
+// Shared by a fresh play and a seek (which is really "stop, then start
+// again at a different byte offset"). Assumes audioDataStartOffset/
+// audioTotalDataSize/audioBytesPerSecond/audioDurationSeconds are already
+// set by the caller.
+static bool beginAudio(const char* soundPath, AudioFormat format, uint32_t fromByteOffset, float startPositionSeconds) {
+  String localPath = "/" + String(soundPath);
+
+  audioSource = new AudioFileSourceFS(FFat, localPath.c_str());
+  if (fromByteOffset > 0) {
+    audioSource->seek(fromByteOffset, SEEK_SET);
+  }
+
+  audioOutput = new AudioOutputI2S(0);
+  audioOutput->SetPinout(I2S_BCLK_PIN, I2S_LRC_PIN, I2S_DOUT_PIN);
+  audioOutput->SetGain(getSharedVolume());
+
+  audioGenerator = (format == FORMAT_MP3) ? (AudioGenerator*)new AudioGeneratorMP3() : (AudioGenerator*)new AudioGeneratorWAV();
+
+  if (!audioGenerator->begin(audioSource, audioOutput)) {
+    Serial.printf("Decoder failed to start for %s\n", soundPath);
+    delete audioGenerator; audioGenerator = nullptr;
+    delete audioOutput; audioOutput = nullptr;
+    delete audioSource; audioSource = nullptr;
+    return false;
+  }
+
+  currentFormat = format;
+  audioOpen = true;
+  audioPaused = false;
+  audioPositionBaseSeconds = startPositionSeconds;
+  audioPositionBaseMs = millis();
+  strncpy(currentSoundPath, soundPath, sizeof(currentSoundPath) - 1);
+  currentSoundPath[sizeof(currentSoundPath) - 1] = '\0';
+
+  setSharedPosition(startPositionSeconds, audioDurationSeconds);
+  setSharedStatus(STATUS_PLAYING);
+  return true;
+}
+
+static void startPlayback(const char* soundPath) {
+  stopPlayback();
+
+  bool mp3 = isMp3Path(soundPath);
   String localPath = "/" + String(soundPath);
 
   File probe = FFat.open(localPath, "r");
@@ -789,136 +695,82 @@ static void startMp3Playback(const char* soundPath) {
     Serial.printf("Could not open %s\n", localPath.c_str());
     return;
   }
-  uint32_t fileSize = probe.size();
-  uint32_t dataStart = 0, bytesPerSecond = 0;
-  bool gotBitrate = estimateMp3Bitrate(probe, &dataStart, &bytesPerSecond);
+
+  uint32_t dataStart = 0, bytesPerSecond = 0, totalDataSize = 0;
+  bool ok;
+  if (mp3) {
+    uint32_t fileSize = probe.size();
+    ok = estimateMp3Bitrate(probe, &dataStart, &bytesPerSecond);
+    if (ok) totalDataSize = fileSize - dataStart;
+  } else {
+    uint32_t sampleRate = 0, dataSize = 0;
+    uint16_t bitsPerSample = 0, numChannels = 0;
+    ok = parseWavHeader(probe, &sampleRate, &bitsPerSample, &numChannels, &dataSize);
+    if (ok) {
+      dataStart = probe.position(); // parseWavHeader leaves the file here
+      bytesPerSecond = sampleRate * numChannels * (bitsPerSample / 8);
+      totalDataSize = dataSize;
+    }
+  }
   probe.close();
 
-  if (!gotBitrate || bytesPerSecond == 0) {
-    Serial.printf("Could not find a valid MP3 frame in %s\n", localPath.c_str());
+  if (!ok || bytesPerSecond == 0) {
+    Serial.printf("Could not start %s -- invalid or unsupported file.\n", localPath.c_str());
     return;
   }
 
-  mp3FileSize = fileSize;
-  mp3DataStartOffset = dataStart;
-  mp3BytesPerSecond = bytesPerSecond;
-  mp3DurationSeconds = (float)(fileSize - dataStart) / bytesPerSecond;
+  audioDataStartOffset = dataStart;
+  audioBytesPerSecond = bytesPerSecond;
+  audioTotalDataSize = totalDataSize;
+  audioDurationSeconds = (float)totalDataSize / bytesPerSecond;
 
-  mp3Source = new AudioFileSourceFS(FFat, localPath.c_str());
-  mp3Output = new AudioOutputI2S(0);
-  mp3Output->SetPinout(I2S_BCLK_PIN, I2S_LRC_PIN, I2S_DOUT_PIN);
-  mp3Output->SetGain(getSharedVolume());
-  mp3Generator = new AudioGeneratorMP3();
-
-  if (!mp3Generator->begin(mp3Source, mp3Output)) {
-    Serial.printf("MP3 decoder failed to start for %s\n", localPath.c_str());
-    stopMp3Playback();
-    return;
-  }
-
-  mp3Open = true;
-  mp3Paused = false;
-  mp3PositionBaseSeconds = 0;
-  mp3PositionBaseMs = millis();
-  strncpy(currentSoundPath, soundPath, sizeof(currentSoundPath) - 1);
-  currentSoundPath[sizeof(currentSoundPath) - 1] = '\0';
-
-  setSharedPosition(0, mp3DurationSeconds);
-  setSharedStatus(STATUS_PLAYING);
-  Serial.printf("Playing %s (MP3, ~%d kbps estimated), ~%.1fs\n", soundPath, (bytesPerSecond * 8) / 1000, mp3DurationSeconds);
-}
-
-static void seekMp3Playback(float seconds) {
-  if (!mp3Open || !mp3Source) return;
-  uint32_t targetOffset = mp3DataStartOffset + (uint32_t)(seconds * mp3BytesPerSecond);
-  if (targetOffset > mp3FileSize) targetOffset = mp3FileSize;
-  mp3Source->seek(targetOffset, SEEK_SET);
-
-  mp3PositionBaseSeconds = seconds;
-  mp3PositionBaseMs = millis();
-  setSharedPosition(seconds, mp3DurationSeconds);
-}
-
-// Called every loop() iteration when an MP3 is the active file. Each call
-// to generator->loop() decodes and outputs a small bounded amount of
-// audio, same bounded-per-call contract pumpWavPlayback() has -- so this
-// can't stall the network task either.
-static void pumpMp3Playback() {
-  if (!mp3Open || mp3Paused || !mp3Generator) return;
-
-  if (!mp3Generator->loop()) {
-    stopPlayback();
-    Serial.println("MP3 playback finished (or a decode error stopped it).");
-    return;
-  }
-
-  float positionSeconds = mp3PositionBaseSeconds + (millis() - mp3PositionBaseMs) / 1000.0f;
-  if (positionSeconds > mp3DurationSeconds) positionSeconds = mp3DurationSeconds;
-  setSharedPosition(positionSeconds, mp3DurationSeconds);
-}
-
-// ---------- Playback dispatch (WAV vs MP3, picked by file extension) ----------
-
-static void stopPlayback() {
-  if (currentIsMp3) {
-    stopMp3Playback();
-  } else {
-    stopWavPlayback();
-  }
-  currentSoundPath[0] = '\0';
-  setSharedStatus(STATUS_IDLE);
-  setSharedPosition(0, 0);
-}
-
-static void startPlayback(const char* soundPath) {
-  stopPlayback();
-  currentIsMp3 = isMp3Path(soundPath);
-  if (currentIsMp3) {
-    startMp3Playback(soundPath);
-  } else {
-    startWavPlayback(soundPath);
+  if (beginAudio(soundPath, mp3 ? FORMAT_MP3 : FORMAT_WAV, dataStart, 0)) {
+    Serial.printf("Playing %s (%s, ~%d kbps%s), ~%.1fs\n", soundPath, mp3 ? "MP3" : "WAV",
+                  (bytesPerSecond * 8) / 1000, mp3 ? " estimated" : "", audioDurationSeconds);
   }
 }
 
+// Repositions within the currently open file -- e.g. from the app's
+// scrubber. Restarts the generator against a freshly-seeked source (see
+// the note above the Playback section) rather than seeking mid-stream.
 static void seekPlayback(float seconds) {
-  if (currentIsMp3) {
-    seekMp3Playback(seconds);
-  } else {
-    seekWavPlayback(seconds);
-  }
+  if (!audioOpen) return;
+  if (seconds < 0) seconds = 0;
+  if (seconds > audioDurationSeconds) seconds = audioDurationSeconds;
+
+  uint32_t targetOffset = audioDataStartOffset + (uint32_t)(seconds * audioBytesPerSecond);
+  AudioFormat format = currentFormat;
+  char pathCopy[80];
+  strncpy(pathCopy, currentSoundPath, sizeof(pathCopy));
+
+  if (audioGenerator) { if (audioGenerator->isRunning()) audioGenerator->stop(); delete audioGenerator; audioGenerator = nullptr; }
+  if (audioOutput) { audioOutput->stop(); delete audioOutput; audioOutput = nullptr; }
+  if (audioSource) { delete audioSource; audioSource = nullptr; }
+
+  beginAudio(pathCopy, format, targetOffset, seconds);
 }
 
 static void pausePlayback() {
-  if (currentIsMp3) {
-    if (mp3Open && !mp3Paused) {
-      mp3Paused = true;
-      setSharedStatus(STATUS_PAUSED);
-    }
-  } else {
-    if (playback.open && !playback.paused) {
-      playback.paused = true;
-      setSharedStatus(STATUS_PAUSED);
-    }
+  if (audioOpen && !audioPaused) {
+    audioPaused = true;
+    // Freeze the elapsed-time base at the current position so resuming
+    // continues from here instead of jumping ahead by however long the
+    // pause lasted.
+    audioPositionBaseSeconds = audioPositionBaseSeconds + (millis() - audioPositionBaseMs) / 1000.0f;
+    setSharedStatus(STATUS_PAUSED);
   }
 }
 
 static void resumePlayback() {
-  if (currentIsMp3) {
-    if (mp3Open && mp3Paused) {
-      mp3Paused = false;
-      mp3PositionBaseMs = millis(); // resume timing from now; base seconds stays frozen from pause
-      setSharedStatus(STATUS_PLAYING);
-    }
-  } else {
-    if (playback.open && playback.paused) {
-      playback.paused = false;
-      setSharedStatus(STATUS_PLAYING);
-    }
+  if (audioOpen && audioPaused) {
+    audioPaused = false;
+    audioPositionBaseMs = millis(); // resume timing from now; base seconds stays frozen from pause
+    setSharedStatus(STATUS_PLAYING);
   }
 }
 
 static bool currentlyOpenAndPaused() {
-  return currentIsMp3 ? (mp3Open && mp3Paused) : (playback.open && playback.paused);
+  return audioOpen && audioPaused;
 }
 
 // Consumes whatever the network task last requested. Called every loop()
@@ -954,12 +806,26 @@ static void consumePendingCommands() {
   }
 }
 
+// Called every loop() iteration. Each call to generator->loop() decodes
+// and outputs a small bounded amount of audio -- never touches the
+// network, so a slow/stalled HTTPS request on the other task can never
+// cause an audio glitch here.
 static void pumpPlayback() {
-  if (currentIsMp3) {
-    pumpMp3Playback();
-  } else {
-    pumpWavPlayback();
+  if (!audioOpen || audioPaused || !audioGenerator) return;
+
+  // Cheap enough to just do every call rather than only on a volume
+  // change -- keeps the slider live without needing to restart playback.
+  if (audioOutput) audioOutput->SetGain(getSharedVolume());
+
+  if (!audioGenerator->loop()) {
+    stopPlayback();
+    Serial.println("Playback finished (or a decode error stopped it).");
+    return;
   }
+
+  float positionSeconds = audioPositionBaseSeconds + (millis() - audioPositionBaseMs) / 1000.0f;
+  if (positionSeconds > audioDurationSeconds) positionSeconds = audioDurationSeconds;
+  setSharedPosition(positionSeconds, audioDurationSeconds);
 }
 
 // ---------- Network task ----------
