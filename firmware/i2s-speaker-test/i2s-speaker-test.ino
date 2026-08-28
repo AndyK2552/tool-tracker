@@ -101,6 +101,13 @@
 
 enum PlaybackStatus { STATUS_IDLE, STATUS_PLAYING, STATUS_PAUSED };
 
+// Declared up here (not down in the Playback section where it's used) --
+// Arduino auto-generates forward declarations for every function near the
+// top of the file, before any type only defined further down actually
+// exists yet. beginAudio()'s signature uses this, so it has to be visible
+// this early or the auto-generated prototype fails to compile.
+enum AudioFormat { FORMAT_WAV, FORMAT_MP3 };
+
 // ---------- Cross-task shared state ----------
 //
 // Kept deliberately small: the network task only needs to know (a) what
@@ -604,8 +611,6 @@ static bool isMp3Path(const char* soundPath) {
   lower.toLowerCase();
   return lower.endsWith(".mp3");
 }
-
-enum AudioFormat { FORMAT_WAV, FORMAT_MP3 };
 
 static AudioFileSourceFS* audioSource = nullptr;
 static AudioGenerator* audioGenerator = nullptr;
