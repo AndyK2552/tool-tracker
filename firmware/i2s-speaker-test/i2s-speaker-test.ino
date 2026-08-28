@@ -137,6 +137,12 @@ static float getSharedVolume() {
 // ---------- WiFi ----------
 
 static void connectWiFi() {
+  // Disconnect first, even on the very first call -- retrying WiFi.begin()
+  // while the driver hasn't fully settled from a previous attempt produces
+  // "wifi:sta is connecting, cannot set config" and makes the retry itself
+  // unreliable.
+  WiFi.disconnect(true, true);
+  delay(100);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connecting to WiFi...");
