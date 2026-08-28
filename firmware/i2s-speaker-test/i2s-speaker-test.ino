@@ -136,6 +136,28 @@ static float getSharedVolume() {
 
 // ---------- WiFi ----------
 
+// One-time diagnostic: lists every 2.4GHz network the radio can actually
+// see, with signal strength. ESP32 has no 5GHz radio at all, so if the
+// target SSID is 5GHz-only (or just out of range) it will never show up
+// here -- that alone would explain a connection that never succeeds no
+// matter how correct the credentials are.
+static void scanAndLogNetworks() {
+  WiFi.mode(WIFI_STA);
+  Serial.println("Scanning for WiFi networks...");
+  int n = WiFi.scanNetworks();
+  if (n <= 0) {
+    Serial.println("  No networks found at all -- check antenna/power, or the board may be in a shielded spot.");
+  } else {
+    for (int i = 0; i < n; i++) {
+      bool isTarget = WiFi.SSID(i) == WIFI_SSID;
+      Serial.printf("  %s (RSSI %d dBm, channel %d)%s\n",
+        WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.channel(i),
+        isTarget ? "  <-- target network" : "");
+    }
+  }
+  WiFi.scanDelete();
+}
+
 static void connectWiFi() {
   // Put the radio in station mode before touching it further -- calling
   // disconnect() first, before the driver has ever been put into STA mode
@@ -159,7 +181,10 @@ static void connectWiFi() {
     Serial.println(" connected: " + WiFi.localIP().toString());
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   } else {
-    Serial.println(" failed, will retry");
+    // Status codes worth knowing: 1 = WL_NO_SSID_AVAIL (network not found --
+    // out of range or 5GHz-only), 4 = WL_CONNECT_FAILED (usually a wrong
+    // password), 6 = WL_DISCONNECTED (generic/timed out).
+    Serial.printf(" failed (status=%d), will retry\n", WiFi.status());
   }
 }
 
@@ -511,6 +536,7 @@ static void pumpPlayback() {
 // ---------- Network task ----------
 
 static void networkTask(void* param) {
+  scanAndLogNetworks();
   connectWiFi();
 
   long lastSeenSeq = -1;
