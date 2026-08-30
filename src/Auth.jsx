@@ -76,13 +76,13 @@ function Auth() {
           <>
             <h2 style={{ color: colors.white, fontSize: '18px' }}>Check your email</h2>
             <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '1.25rem' }}>
-              We sent a sign-in link to {email}. Tap it to log in, or enter the 6-digit code from that same email below.
+              We sent a sign-in link to {email}. Tap it to log in, or enter the code from that same email below.
             </p>
             <form onSubmit={handleVerifyCode} style={{ maxWidth: '320px', margin: '0 auto' }}>
               <input
                 type="text"
                 inputMode="numeric"
-                placeholder="6-digit code"
+                placeholder="Enter code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 required
