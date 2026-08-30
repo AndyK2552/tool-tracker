@@ -8,6 +8,8 @@ function Auth() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(null);
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [copied, setCopied] = useState(false);
   const [authLog, setAuthLog] = useState(() => getAuthLog());
@@ -48,6 +50,23 @@ function Auth() {
     }
   };
 
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setVerifying(true);
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: 'email',
+    });
+
+    if (error) {
+      setError(error.message);
+    }
+    setVerifying(false);
+  };
+
   return (
     <div style={{ background: colors.navy, minHeight: '100vh' }}>
       <PageHeader title="KYPD Tool Tracker" />
@@ -56,8 +75,56 @@ function Auth() {
         {sent ? (
           <>
             <h2 style={{ color: colors.white, fontSize: '18px' }}>Check your email</h2>
-            <p style={{ color: colors.textMuted, fontSize: '14px' }}>
-              We sent a sign-in link to {email}. Tap it to log in.
+            <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '1.25rem' }}>
+              We sent a sign-in link to {email}. Tap it to log in, or enter the 6-digit code from that same email below.
+            </p>
+            <form onSubmit={handleVerifyCode} style={{ maxWidth: '320px', margin: '0 auto' }}>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="6-digit code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontSize: '15px',
+                  marginBottom: '1rem',
+                  textAlign: 'center',
+                  letterSpacing: '0.2em',
+                }}
+              />
+              <button
+                type="submit"
+                disabled={verifying}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: colors.gold,
+                  color: colors.navy,
+                  fontWeight: 'bold',
+                  fontSize: '15px',
+                  cursor: 'pointer',
+                  opacity: verifying ? 0.6 : 1,
+                }}
+              >
+                {verifying ? 'Verifying...' : 'Verify Code'}
+              </button>
+            </form>
+            <p style={{ marginTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => { setSent(false); setCode(''); setError(null); }}
+                style={{ background: 'none', border: 'none', color: colors.textMuted, fontSize: '0.85rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+              >
+                Use a different email
+              </button>
             </p>
           </>
         ) : (
@@ -99,9 +166,10 @@ function Auth() {
                 Send Sign-In Link
               </button>
             </form>
-            {error && <p style={{ color: '#ff8080', marginTop: '1rem', fontSize: '13px' }}>{error}</p>}
           </>
         )}
+
+        {error && <p style={{ color: '#ff8080', marginTop: '1rem', fontSize: '13px' }}>{error}</p>}
 
         {authLog.length > 0 && (
           <div style={{ marginTop: '2rem', maxWidth: '320px', marginLeft: 'auto', marginRight: 'auto', textAlign: 'left' }}>
