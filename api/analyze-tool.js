@@ -15,6 +15,7 @@ export default async function handler(req, res) {
       headers: {
         'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
+        'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID,
         'content-type': 'application/json',
       },
       body: JSON.stringify({
